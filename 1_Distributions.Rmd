@@ -1,0 +1,642 @@
+---
+title: "Populations & Distributions"
+output: html_document
+---
+
+# Setup
+
+```{r}
+library(ggplot2) # plotting library
+
+source("http://bit.ly/theme_pub") # Set custom plotting theme
+theme_set(theme_pub())
+```
+
+# Population vs Sample
+
+Population and Sample are two core concepts in probability and statistics. Both 
+words have several meanings in the English language, but specific meanings in 
+statistcs.
+
+The [Statistical Population](https://en.wikipedia.org/wiki/Statistical_population) 
+is a group of individuals or objects that is usually too numerous to observe and 
+measure each individually.
+
+The [Statistical Sample](https://en.wikipedia.org/wiki/Sample_(statistics)) 
+(or mathemattically a [Subset](https://en.wikipedia.org/wiki/Subset)) is the smaller 
+number of individuals or objects that we observe.
+
+The goal of statistics is to make inferences about the **population** based on 
+observations we can make about the **Sample**. Typically, this will be based 
+on one or more observations. 
+
+# Distributions
+
+Populations and samples have a distribution, which describes all of the observations 
+about the population or sample. Test statistics also have distributions 
+(e.g. $t$, $\chi^2$, $F$). 
+
+I like to think of a distribution as a histogram. In R we can very quickly 
+generate sample distributions by randomly selecting numbers from a population 
+distribution. There are many population distributions to chose from, but let's 
+take a look at a few of the most common:
+
+ Distribution | Data Type | Example 
+--------------|-----------|---------------------
+ Gaussian | Continuous data | height or length 
+ Poisson | Count data | seed or egg number 
+ Binomial | Bernoulli or Boolean data | Allele (A or a) 
+
+
+
+## Gaussian
+
+The Gaussian distribution is probably the first distribution you learned about. 
+It fits many kinds of continuous measurement data. The `rnorm()` function in R 
+can be used to sample from a Gaussian distribution. Let's take a look: 
+
+```{r, eval=F}
+?rnorm
+```
+
+Notice the 3 key parameters of rnorm: 
+
+  * `n` -- number of observations (sample size)
+  * `mean` -- vector of means (of the population)
+  * `sd` -- vector of standard deviations (of the populations) 
+
+We can use this to generate a random sample to visualize with qplot. Let's 
+imagine we catch 10 lizards and measure their tail lengths. We'll create a model 
+for a population mean of 20 and standard deviation of 2. 
+
+```{r, message=F}
+Tails<-rnorm(n=10, mean=20, sd=2)
+qplot(x=Tails)
+```
+
+Take a second to compare your graph with this one and you should see some 
+differences. That's because we've randomly sampled different individuals from 
+the population. We'll come back to this in the next section. 
+
+> Coding ProTip: you can use `set.seed` to always choose the same random sample
+
+```{r, message=F}
+set.seed(1234567890)
+Tails<-rnorm(n=10, mean=20, sd=2)
+qplot(x=Tails)
+```
+
+`set.seed` can be useful for troubleshooting and testing your code
+
+Notice also in the description above that the `mean` and `sd` parameters are 
+described as vectors. In our example we used a single value for each, representing 
+a vector of length=1.
+
+> What happens if you use a vector with > 1 element? e.g. c(20,0)
+
+## Poisson
+
+The Poisson distribution is common for count data, meaning that the sample will 
+contain only whole numbers (no fractions/decimals) that are greater than or 
+equal to zero. The `rpois` function draws from a Poisson distribution.
+
+```{r, eval=F}
+?rpois
+```
+
+From the help file we can see two key parameters:
+
+  * `n` -- number of observations (sample size; same as rnorm)
+  * `lambda` -- vector of means (must be > 0)
+
+Let's simulate a sample of egg number from the same lizards we captured above
+
+```{r, message=F}
+Eggs<-rpois(n=10, lambda=4)
+qplot(x=Eggs)
+```
+
+> What is the mean number of eggs per lizard in the population?
+
+## Binomial
+
+The binomial distribution describes a population of a Bernoulli or Boolean variable. 
+The most popular example is the coin flip, but it is anything that can be encoded 
+as true/false or 0/1. 
+
+The `rbin` function draws from a binomial distribution
+
+```{r, eval=F}
+?rbinon
+```
+
+Here we see three parameters:
+
+  * `n` -- number of observations (sample size, as above)
+  * `size` -- number of trials 
+  * `prob` -- probability of success on each trial
+
+What's the difference between `n` and `size`? This is a bit tricky, and easier 
+to explain with examples.
+
+Imagine we again sample 10 lizards and check whether they are male or female. Let's 
+also say that the population has an equal sex ratio: 50% male and 50% female
+
+```{r, message=F}
+Females<-rbinom(n=10, size=1, prob=0.5)
+qplot(x=Females)
+```
+
+In this example, we set `size=1` because we are only sampling one lizard.
+
+Now imagine that we want to sample only female lizards but then look at the embryos 
+developing in their eggs to determine if they are male or female. We'll sample 5 
+eggs per female.
+
+```{r, message=F}
+EggF<-rbinom(n=10, size=5, prob=0.5)
+qplot(x=EggF)
+```
+
+> How would you model this if there were 60% females and 40% males?
+
+Compare the two binomial graphs carefully. What is different and why? 
+Looking at the raw data can help to understand this:
+
+```{r}
+head(Females)
+head(EggF)
+str(Females)
+str(EggF)
+```
+
+In the first case, we are sampling 10 lizards to check whether they are female. 
+These data are boolean (1/0 or true/false). When we plot them, we get a frequency 
+histogram showing the proportions of 1 and 0.
+
+In the second case, we are sampling 5 eggs **and then counting** how many are female. 
+These data are count data similar to the Poisson distribution except that we can't 
+have more than 5.
+
+# Distribution Metrics
+
+In addition to visualizing our sample distributions as histograms, we can calculate 
+some basic characteristics about our distributions. These parameters can describe 
+the distribution of our entire **population** or the distribution of a particular
+**sample** drawn from the population. The equations are similar so we need to use 
+different symbols to make it clear whether we mean the sample or the population. 
+We'll use this convention:
+
+Metric | Sample Symbol | Population Symbol
+-------| ------ | ------
+Individual | $x_i$  | $x_i$
+Mean | $\bar x$ | $\bar X$
+SD | $s$ | $\sigma$
+
+## Mean
+
+The sample mean is the average value, calculated by adding up all of the individual 
+observations ($x_i$) and dividing by the number of observations ($n$). 
+
+$$ \bar x = \frac{ \sum x_i }{n} $$
+
+```{r}
+mean(Tails)
+mean(Eggs)
+mean(Females)
+mean(EggF)
+```
+
+## Standard Deviation
+
+The standard deviation $s$ of a sample is just the square-root of the 
+variance $s^2$, and it describes how much the data spreads out away from 
+the mean. The variance takes each value $x_i$ and subtracts the mean $\bar x$. 
+Then it adds all of these values together and divides by the sample size minus 1.
+
+$$ s^2 = \frac{ \sum x_i - \bar x }{n - 1} $$
+
+## Coefficient of Variation
+
+The coefficient of variance $C_V$ (aka relative standard deviation, RSD) is simply 
+the standard deviation divided by the mean. This can be useful because 
+the variance of a sample often scales with the mean. Often this is multiplied by 
+100%, though this isn't always the case.
+
+$$ C_V = \frac{s}{\bar x} \times 100\% $$
+
+> TIP: Don't get tripped up by the math. You've learned it before and 
+R has functions to quickly calculate these paramters
+
+# Central Limit Theorem
+
+What is the relationship between the distribution of a **population** vs the 
+distribution of a **sample**? Let's go back to our lizard tail data.
+
+```{r}
+set.seed(25)
+Tails<-rnorm(n=10, mean=20, sd=2)
+```
+
+In this code the mean of our **population** is 20 and the standard deviation of 
+our population is 2. What is the mean and standard deviation of our sample?
+
+```{r}
+mean(Tails)
+sd(Tails)
+```
+
+What happens as we increase our sample size?
+```{r}
+set.seed(25)
+Tails<-rnorm(n=100, mean=20, sd=2)
+mean(Tails)
+sd(Tails)
+set.seed(25)
+Tails<-rnorm(n=1000, mean=20, sd=2)
+mean(Tails)
+sd(Tails)
+set.seed(25)
+Tails<-rnorm(n=1000, mean=20, sd=2)
+mean(Tails)
+sd(Tails)
+```
+
+The Central Limit Theorem describes this phenomenon. As our sample size increases 
+our sample distribution approaches our population distribution.
+
+## Standard Error
+
+All of the above metrics ($\bar x$, $s$, $C_v$) are measured directly on the sample. 
+
+The standard error (SE), aka the standard error of the mean (SEM) is can also be
+calculated from the observed sample data, but it also takes advantage of the 
+Central Limit Theorem to estimate a predicted range for the population mean of 
+a Gaussian distribution.
+
+$$ SE = \frac{s}{\sqrt N}$$
+## Confidence Interval
+
+The confidence interval (CI) is a range of two values (high/low) that we predict should 
+include the population mean.
+
+For a Gaussian distribution, the population mean $\bar X$ has a 95% chance of 
+falling within +/- 1.96 SE of the sample mean
+
+$$ CI = \bar x \pm 1.96 \times SE  $$
+
+I get confused by math, but I find it easier to understand when you code it in R.
+
+Let's do one with a small sample size. And another with a large sample size:
+
+```{r}
+set.seed(25)
+N<-10
+Tails<-rnorm(n=N, mean=20, sd=2)
+x<-mean(Tails)
+sd<-sd(Tails)
+se<-sd/sqrt(N)
+CI<-c(x-1.96*se, x+1.96*se)
+print(CI)
+```
+We can also calculate the CI width by subtracting the higher number from the lower:
+
+```{r}
+CI[2]-CI[1]
+```
+
+
+Now we could set N to 10,000 and re-run the code above:
+
+```{r, echo=F}
+set.seed(25)
+N<-10000
+Tails<-rnorm(n=N, mean=20, sd=2)
+x<-mean(Tails)
+sd<-sd(Tails)
+se<-sd/sqrt(N)
+CI<-c(x-1.96*se, x+1.96*se)
+print(CI)
+CI[2]-CI[1]
+```
+
+> Compare the mean, sd, SE and CI for the two different sample sizes, and the 
+population mean and sd (in the rnorm function)
+
+
+# Sample Probability
+
+Sometimes we want to test an observation against an expected distribution. For 
+example, what if we find a new lizard with a tail length of 32.4 and 
+we want to calculate the probability that this lizard came from the study population? 
+
+We know tail lengths in our lizard species are normally distributed with 
+a mean of 20 and sd of 2.
+
+One way is to look at the distribution of a very large sample size and compare it 
+to the observed value. We can plot this value onto the histogram with 
+`geom_line` or `geom_vline` in the `ggplot` library:
+
+```{r, message=F}
+qplot(x=Tails) + geom_vline(xintercept=32.4, colour="red")
+```
+
+We can see that the observed value is way beyond any of our sampled values, so 
+intuitively it looks unlikely. But how do we calculate the probability that we 
+would observe this length of 100 given the study population? 
+
+The probability is just the area under the sample distribution that includes the 
+observed value. The specific calculation depends on our hypothesis.
+
+## z-score
+
+A more common way to do this is to transform the data to **z-scores**. The 
+**z-distribution** is a Gaussian distribution with a mean of zero and standard 
+deviation of 1. Let's say we sample 1,000 of our lizard population, and then 
+standardize the tail lengths to z-scores, which is a simple equation:
+
+$$ z_i = \frac{x_i-\bar x}{s}$$
+
+In other words, to calculate the z-score for each individual $z_i$ :
+
+  1. Calculate the mean $\bar x$ and sd $s$ of the sample
+  2. Subtract the mean from each observation $x_i$ 
+  3. Divide by the standard deviation
+  
+Here is the raw data for this sample population:
+
+```{r}
+N<-1000
+Tails<-rnorm(n=N, mean=20, sd=2)
+x<-mean(Tails)
+sd<-sd(Tails)
+se<-sd/sqrt(N)
+CI<-c(x-1.96*se, x+1.96*se)
+print(CI)
+CI[2]-CI[1]
+
+qplot(Tails)
+```
+
+And the z-scores:
+
+```{r}
+zTails<-(Tails-mean(Tails))/sd(Tails)
+qplot(zTails)
+```
+
+> Make sure to subtract the mean before dividing by sd
+
+Notice how the shape is identical, only the x-axis has changed.
+
+Now if we want to test whether the lizard with tail length 32.4 comes from the 
+same population as our sample, we have to transform 32.4 to a z-score using the
+sample mean and sd:
+
+```{r}
+zLiz<-(32.4-mean(Tails))/sd(Tails)
+print(zLiz)
+qplot(zTails) + geom_vline(xintercept=zLiz,colour=I("red"),size=I(2))
+```
+
+Visually this looks like good evidence for a different species since there is no 
+visible overlap with the study sample. But we also know that the human brain is 
+always trying to find patterns, so we need a more formal test. There are two 
+options here depending on our hypothesis.
+
+## 2-tail test 
+
+The 2-tail test simply asks whether the observed value is different than we 
+would expect from a random sample of the study population. It does not make a 
+prediction about whether the value would be higher or lower. 
+
+$H_0 =$  The observation is NOT DIFFERENT from the population
+
+## 1-tail test
+
+The 1-tail test requires a directional prediction, for example, what is the 
+probability that this sample is larger than expected from a random sample of the 
+study population.
+
+
+$H_0 =$ The observation is NOT BIGGER than the population
+ 
+  OR
+  
+
+$H_0 =$ The observation is NOT SMALLER than the population
+
+  
+> The difference between a 1-tail and two-tail test is usually achieved by 
+mutliply/dividing the p-value by 2
+
+## pnorm
+
+Calculating the area under a Gaussian curve is easy to do in R, by using the 
+`pnorm` function:
+
+```{r, eval=F}
+?pnorm
+```
+
+Note the different parameters compared to rnorm. The key differences are:
+
+  * `lower.tail` -- provides a probability that the observed value is 
+  lower (`TRUE`) or higher (`FALSE`) than expected by chance
+  * `q` -- the vector of quantiles. This is just the vector of the observations 
+  that we wish to test. We can do this with z-scores or the original data:
+  
+```{r}
+pnorm(q=32.4, mean=mean(Tails) ,sd=sd(Tails), lower.tail=F)
+pnorm(q=zLiz, mean=0, sd=1, lower.tail=F)
+```
+
+Since our observed value was great than the mean, we use `lower.tail = F`
+
+The value is a probability ranging from 0 to 1.
+
+> EXERCISE: Try changing sd and q to understand how the probability changes depending 
+on the variance of the population and the difference between the observation and 
+the population mean
+
+The only difference between a 1-tail and 2-tail test is that we divide the 
+probability (p-value) by 2 for a 2-tailed test to account for the fact that our
+null hypothesis allowed the observation to be larger OR smaller. The 1-tail 
+hypothesis specifies a predicted direction.
+
+Now, what if we have two or more samples of lizards and we want to see whether
+they came from the same population? 
+
+We need a test statistic.
+
+Test statistics are calculated from a sample in order to test a specific hypothesis.
+
+Some common statistics include $t$ for Student's t-test, $\chi ^2$ for the
+goodness-of-fit test, and $F$ for ANOVA and regression. 
+
+# Student's t
+
+The t-test is a common statistical test and comes in two flavours:
+
+## One-sample t-test
+
+The one-sample t-test allows us to test whether a sample differs significantly 
+from a defined mean. In our case, we might have captured 100 lizards and we want 
+to know if they came from the species with a mean tail length of 20.
+
+The $t$ statistic just compares the sample mean $\bar x$ with the population 
+mean $\mu$.
+
+$$ t = \frac {\bar x - \mu}{SE_x} $$
+
+Notice the similarity to the z-score calculation above, but instead of a z-score 
+for each individual, we calculate a single $t$ value for the sample. Also, we 
+divide by the standard error of the 100 test lizards rather than the standard 
+deviation of of the 10,000 sample of lizards from the popualtion.
+
+The one-sample t-test is particularly useful when you know the population mean 
+but you don't know the population variance. For example, if we wanted to test 
+whether a weight-loss strategy is successful, or whether the presence of a predator 
+alters behaviour of a prey. If our expected mean is zero then t simplifies to the 
+sample mean divided by the standard error.
+
+This equation solves another problem with the z-score example above: we need a 
+very large sample size to accurately characterize the mean and sd of our study 
+population. If we know the mean but not the sd, then the t-test can be used.
+
+The final step is to compare the observed t-value against the range of values we 
+would expect from a randomly drawn sample. 
+
+## Two-sample t-test
+
+The two-sample t-test compares the means of two samples (e.g. $x$ and $y$), to 
+test the null hypothesis that:
+
+  $H_0 = $ Sample $x$ and sample $y$ are randomly sampled from the same population
+  
+Instead of comparing one mean to a null expectation, we compare the two means to 
+each other. Which standard error do we use? Both!
+
+$$ t = \frac{\bar x -\bar y}{\sqrt{(SE_x)^2 + (SE_y)^2}} $$
+
+# Statistical Distributions
+
+So far we have looked at sample distributions and population distributions. They 
+are both defined by similar math (e.g. mean and sd) and can be plotted as histograms. 
+Statistical distributions are another type of distribution based on expected values 
+from random draws. In the old days, we would compare our observed $t$ to a table of 
+$t$ values to calculate a p-value. Today we can do this faster and more accurately 
+in statistical software. In R we can use the `t.test` function. 
+
+The first thing we should do is carefully read the help in R and look at the 
+key parameters:
+
+```{r, eval=F}
+?t.test
+```
+
+Notice that we have vectors of data `x` and `y` (optional) as well as `mu` ($\mu$), 
+which is the mean for the one-sample test or the difference in means for the 
+two-sample test. Notice that the default for `mu` is set to zero. 
+
+One other important parameter is `alternative`, which is analogous to the one-tailed
+and two-tailed tests used with the z-scores above.
+
+Let's create two vectors of data to use with the `t.test` function:
+
+```{r}
+Species1<-c(20,15,17,23,19,15)
+Species2<-c(23,20,32,18,24,32)
+```
+
+## One-sample t
+
+We can use this to separately test whether each species came from the population 
+(i.e. species) with a mean tail length of 20
+
+```{r}
+t.test(x=Species1, mu=20)
+t.test(x=Species2, mu=20)
+```
+
+Let's take a second to look carefully at the output. It specifies what data we 
+use, the caclulated t-value, degrees of freedom (N-1) and the p-value.
+
+It also gives us the confidence interval and the mean of the sample. Notice that
+the 95% confidence interval overlaps our population mean $\mu$ when the p-value 
+is not significant.
+
+## Two-sample t
+
+We can use the two-sample t to test whether the two samples came from the same 
+statistical population:
+
+```{r}
+t.test(x=Species1, y=Species2)
+```
+
+Compare the output with the one-sample tests. Note the **Welch** in the title. 
+This indicates an adjustment, which we can see if we search the help file. That 
+is why the degrees of freedom (df) is not a whole number. 
+
+## Paired t-test
+
+Sometimes our data can be paired in some way. For example, we might apply two different 
+treatments to the same individual, or we might pair two individuals from the same 
+family, class or group. In our lizard example, we might take a male and female egg 
+from each mother and then see if their tail lengths differ. Let's make a sample 
+dataset for 6 mothers, each with one female and one male offspring:
+
+```{r}
+TLen<-data.frame(Mother=c("a","b","c","d","e","f"), # Code for unique mother
+                 mLen=c(28,30,15,12,19,22), # Tail length of son (male)
+                 fLen=c(30,29,17,16,23,26)) # Tail length of daughter (female)
+str(TLen)
+```
+
+Note the special setup of this dataframe: each row is a different maternal lizard.
+
+Again we use the `t.test` function, but this time we specify `paired=true`
+
+```{r}
+t.test(x=TLen$mLen,y=TLen$fLen,paired=T)
+```
+
+Compare to the unpaired, two-sample t-test:
+
+```{r}
+t.test(x=TLen$mLen,y=TLen$fLen,paired=F)
+```
+
+Why such a big difference in p-value? Let's compare the groups:
+
+```{r}
+mean(TLen$mLen) # mean males
+sd(TLen$mLen)/sqrt(length(TLen$mLen)) # SE males
+mean(TLen$fLen) # mean females
+sd(TLen$fLen)/sqrt(length(TLen$mLen)) # SE females
+```
+
+The means are different, but the confidence intervals overlap. This is because 
+individual lizards vary a lot in the size of offspring. A paired t-test accounts 
+for the variation among lizards before testing for a difference in the mean 
+between male and female eggs. 
+
+# Assumptions
+
+Every statistical test has assumptions. It's important to know these assumptions 
+and to make sure your data conform to the assumptions, otherwise your p-value can 
+be meaningless. 
+
+A key assumption for the t-test is that the population follows a Gaussian distribution. 
+We know this is true for data created with `rnorm` but we don't know if it's true 
+for most real-world data. 
+
+There are many reasons and examples of real-world data violating these assumptions, 
+and we can characterize some of this using [central moments](2_Moments.html).
+
+
+
+
+
+
