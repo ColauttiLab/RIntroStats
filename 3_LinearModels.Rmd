@@ -1,0 +1,440 @@
+---
+title: "Permutation Tests"
+output: html_document
+---
+
+# Setup
+
+Load libraries and our custom plotting theme.
+
+```{r, message=F}
+library(ggplot2) # plotting library
+library(dplyr) # data management
+
+source("http://bit.ly/theme_pub") # Set custom plotting theme
+theme_set(theme_pub())
+```
+
+We will be working with the same `FallopiaData.csv` data that we used in the 
+[R fundamentals tutorial](https://colauttilab.github.io/RCrashCourse/1_fundamentals.html) and the [`qplot` tutorial](https://colauttilab.github.io/RCrashCourse/2_qplot.html). We 
+could download to a local folder again and then read from our computer.
+
+Another trick is to read the file directly from the internet. This will work for 
+any file available through `http://`
+
+```{r}
+InDat<-read.csv("http://colauttilab.github.io/RCrashCourse/FallopiaData.csv")
+str(InDat)
+```
+
+The structure function `str()` is a handy way to inspect the data, but it 
+doesn't show us all the different values for the categorical columns. We can 
+use the `unique()` function for that. We could apply it to each column 
+or we can use the `dplyr()` function from the [data science](https://colauttilab.github.io/RCrashCourse/5_datascience.html) tutorial
+
+```{r}
+InDat %>%
+  select(Scenario, Nutrients, Taxon) %>%
+  unique()
+```
+
+This gives us every combination of the categorical variables. In this case, we 
+can see that most of the different `Scenario` categories are only applied to the 
+high `Nutrient` treatment. 
+
+Looking at the combined output, we can see:
+
+  * **PotNum** - a unique ID number for each plant pot
+  * **Scenario** - the way fertilizer was applied
+  * **Nutrients** - the amount of fertilizer applied
+  * **Taxon** - the species of *Fallopia*
+  * **Symphytum, Silene, Urtica, Geranium, Geum** - biomass of native plants, 
+  in competition with one of the two *Fallopia* species grown
+  * **Fallopia** - biomass of the *Fallopia* competitor species
+  
+# Overview
+
+Most statistical textbooks and courses will go through all of the standard models 
+including ANOVA and linear regression, then slightly more complicated models like 
+polynomial regression, multiple regression, multifactor ANOVA, and ANCOVA.
+
+I'm not sure why stats are always taught this way. There could be a good reason 
+but I suspect it has more to do with the history of statistics: Student's t-test 
+was invented, followed by Fisher's ANOVA, and then linear regression. Then these 
+were expanded to more complicated cases.
+
+However, today we know that all of these models are special cases of a general 
+model in statistics called **Linear Models**. In R, linear models are run with 
+the `lm()` function. Rather than go through the history of statistics, we'll 
+focus on the application of linear models. That said, it's important to know 
+the difference between all those models listed above because many people learn 
+statistics that way, so they are used to talking about those models.
+
+> NOTE: Linear Models are different from General Linear Models, which are both 
+different from Generalized Linear Models. We also have Linear Mixed Effects Models. 
+For now, it's just important to know that these are different classes of models 
+even though they sound similar.
+
+# Structure
+
+In the [`qplot` tutorial](https://colauttilab.github.io/RCrashCourse/2_qplot.html) 
+we looked at visualizations for individual and paired data. 
+
+We saw that data can come in a few flavours:
+
+  * **Binary** -- Boolean variables with two possible states, such as 
+  1 or 0, true/false, yes/no
+  * **Categorical** -- Variables with two or more categories (e.g. treatment)
+  * **Continuous** -- Measurements that can take on a range of values (e.g. height)
+  * **Ordinal** -- Discrete categories but ordered in some way (e.g. number of 
+  offspring)
+
+Different types of linear models (e.g. ANOVA vs Regression) are defined by the 
+type of input data they use. Importantly, Linear Models have two types of input: 
+
+  * **Response** or **Dependent** variables -- these are the data columns that 
+  we are trying to predict.
+  * **Predictor** or **Independent** variables -- thes are the data columns that 
+  we are using to make predictions.
+  
+Linear Models will always have a single, continuous response variable, but it 
+can have one or more predictor variables that may include a mix of binary, 
+categorical and continuous variables. Ordinal variables are a bit more tricky, 
+and will be treated as (approximately) categorical or continuous variables, 
+depending on the nature of the data. 
+
+## Formula
+
+To understand the syntax of a linear model, look at the help:
+
+```{r, eval=F}
+?lm
+```
+
+There are just two main components; the rest we can keep as default for no:
+
+  * **formula** -- this is how we define the model
+  * **data** -- the data.frame object we are analyzing
+
+The formula for linear models looks like this:
+
+`Response ~ Predictor(s)`
+
+You just have to remember the tilde and which side to put your predictor vs 
+response variables.
+
+# Visualizing Types
+
+Let's start by looking at a single response variable and a single predictor. 
+Our response will always be a continuous variable in a Linear Model. Similar to 
+the qplot tutorial, we can organize our linear models based on the type of 
+predictor
+
+To visualize these models, let's first create some data for each type of 
+response variables:
+
+## Continuous
+
+Our continuous response variable (Y)
+
+```{r}
+set.seed(123)
+Y<-rnorm(1000)
+```
+
+A continuous response variable (Xcon)
+
+```{r}
+set.seed(234)
+Xcon<-rnorm(1000)
+```
+
+## Categorical
+
+A categorical response variable (Xcat). 
+
+We can use the sample function `?sample`
+
+```{r}
+set.seed(345)
+Xcat<-sample(c("A","B","C"),1000, replace=T)
+```
+
+
+## Ordinal
+
+What about ordinal data? There are models that can handle this kind of data 
+but usually we have to make a choice whether to treat it as categorical or 
+continuous. 
+
+For example, if we were looking at offspring numbers in Canadian 
+moose, most would have 0, 1 or 2, but some would have 3 or more. We could 
+recode every observation into one of 4 categories: 0, 1, 2, 3+ and analyze 
+offspring number as a categorical variable.
+
+Another example, if we look at the nubmer of seeds on the head of a dandelion, we 
+might find that the distribution follows a normal or log-normal distribution. In 
+that case we can treat it as a continuous variable -- possibly taking the log 
+before using it in our linear model.
+
+# Linear Regression
+
+Linear regression uses a continuous predictor
+
+`Continuous Response ~ Continuous Predictor`
+
+```{r}
+CCplot<-qplot(x=Xcon, y=Y)
+CCplot
+```
+
+In linear regression, we want to find a straight line that fits to the majority 
+of data. We can visulaize this using `geom_smooth()`
+
+```{r}
+CCplot<-CCplot + geom_smooth(method="lm")
+```
+
+
+```{r}
+lm(Y ~ Xcon)
+```
+
+The output of the `lm` function is not too informative. It just shows us the 
+input formula and then the estimated coefficients. There are some additional 
+functions to extract more information about the model. 
+
+```{r}
+LinReg<-lm(Y ~ Xcon)
+summary(LinReg)
+```
+
+## Predictions
+
+The **Estimate** column gives us the equation for the line of best fit, with the 
+intercept and slope. Recall the linear equation:
+
+$$ y = mX + b $$
+
+In linear models, this exact same equation is usually written as:
+
+$$ Y_i \sim \beta_0 + \beta_1 X_i$$
+
+This gives us the equation for the estimated line, which would be okay if every 
+single observation fell exactly on the line of best fit. We can plot for comparison:
+
+```{r}
+CCplot + geom_abline(slope=0.033, intercept=0.017, colour="red")
+```
+
+The red line that we added sits right on top of the `lm` line added from `geom_smooth`.
+
+We can also make specific predictions for each observation:
+
+```{r}
+Predicted<- 0.033*Xcon + 0.017
+CCplot + geom_point(aes(y=Predicted), colour="red")
+```
+
+
+However, we can see that most observations do not fall on the line of best fit. 
+To fully describe the relationship between Y and X, we need to account for the 
+deviation of each point from the line.
+
+## Residual Error
+
+This is called the **error term** or **residual error**:
+
+$$ \epsilon_i = Observed_i - Predicted_i $$
+
+In other words, we:
+
+  1. Look at each point
+  2. Record the observed value on the y-axis
+  3. Look at the predicted value on the y-axis (the line of best fit)
+  4. Subtract the observed value from the predicted
+  
+```{r}
+Resid<-Y-Predicted
+head(Resid)
+```
+  
+  
+Accounting for this error, fully describes each point, giving the correct 
+Linear Model equation: 
+
+$$ Y_i \sim \beta_0 + \beta_1 X_i + \epsilon_i$$
+
+Our regression model has three important vectors:
+
+## Predictor 
+
+Take a minute to review and make sure you understand this. The $Y_i$ is the 
+observed value of our response variable. The subscript $i$ represents an individual 
+value, which tells us that $Y$ is a vector of values.
+
+## Response
+
+Similarly, the $X_i$ is the observed value of our predictor variable, with the 
+same subscript, meaning that $X$ is also a vector. 
+
+## Residuals
+
+And again, $\epsilon$ is also a vector. This vector represents the difference 
+between the observed Y and the predicted Y from our model. This is known as 
+the vector of **residuals** or **residual error**. We can get these from our `lm` object. 
+
+```{r}
+LinResid<-residuals(LinReg)
+head(LinResid)
+```
+
+Compare with our calculation above:
+
+```{r}
+head(Resid)
+```
+
+## Significance
+
+Looking again at our linear regression output, we can see that each estimate 
+has its own **standard error** , **t-value** and **p-value**.
+
+```{r}
+LinReg<-lm(Y ~ Xcon)
+summary(LinReg)
+```
+
+In our [Distributions Tutorial](https://colauttilab.github.io/RIntroStats/1_Distributions.html) we looked at the t-test equation for a mean and standard error. 
+That same equation can be applied to the estimate and standard error for the 
+slope and intercept, under the null hypothesis that `slope = 0` and `intercept = mean(Y)`.
+
+We can also see the **Adjusted R-squared** value, which is very close to zero. 
+This R-squared value is an estimate of the amount of variation explained by the 
+statistical model, rangiong from 0 (no variation explained) to 1 (100% explained).
+
+The **F-statistic** tests the overall fit of the model. In this case you can see 
+that our model is not significant. We can see this more clearly using the `anova` 
+function
+
+```{r}
+anova(LinReg)
+```
+
+
+Let's try to make a significant model by 
+creating a predictor that is related to the response. A simple way is to add a 
+random value to each observation:
+
+```{r}
+CorPred<-Y+rnorm(length(Y))
+CorMod<-lm(Y ~ CorPred)
+qplot(x=CorPred,y=Y) + geom_smooth(method="lm")
+summary(CorMod)
+anova(CorMod)
+```
+
+Now we get a significant slope but not a significant intercept, based on the 
+t-tests of the estimates.
+
+We also get a highly significant F-test and our model explains almost 50% of the
+variation.
+
+# ANOVA
+
+Let's look at a linear model with a categorical predictor.
+
+```{r}
+CatMod<-lm(Y ~ Xcat)
+qplot(x=Xcat, y=Y, geom="boxplot")
+summary(CatMod)
+```
+
+Similar to linear regrssion we have an estimate column, and for each estimate we 
+also have standard error, t-value and probability.
+
+We also have R-squared and F-values describing the fit of the model, along with 
+an overall p-value for the model. 
+
+BUT there is one important difference. Our predictor variable $X_i$ is categorical 
+in this model, rather than continuous. So how do we get from a categorical 
+predictor to an estimated slope?
+
+We have 3 categories: A, B, C and we also have 3 estimates: `(Intercept)`, `XcatB`, 
+and `XcatC`
+
+We can define 3 categories using 2 binary variables.
+
+```{r}
+RecodeDat<-data.frame(Response=Y,
+                      PredGroup=Xcat) %>%
+  mutate(XcatB=recode(Xcat,"A"=0,"B"=1,"C"=0),
+         XcatC=recode(Xcat,"A"=0,"B"=0,"C"=1))
+```
+
+> Why no XcatA?
+
+We know that `Xcat=A` when `XcatB=0` AND `XcatC=0`. 
+
+> Any predictor with N categories can be recoded into N-1 binary columns
+
+Check that the data are recoded properly
+
+```{r}
+head(RecodeDat)
+```
+And run the model
+
+```{r}
+RecLM<-lm(Response ~ XcatB + XcatC, data=RecodeDat)
+summary(RecLM)
+```
+
+and compare to the original ANOVA
+
+```{r}
+summary(CatMod)
+```
+
+This is equivalent to taking the deviation of the means:
+
+```{r}
+A<-RecodeDat %>% 
+  filter(PredGroup=="A") %>%
+  summarize(mean(Response))
+B<-RecodeDat %>% 
+  filter(PredGroup=="B") %>%
+  summarize(mean(Response))
+C<-RecodeDat %>% 
+  filter(PredGroup=="C") %>%
+  summarize(mean(Response))
+
+A
+B-A
+C-A
+```
+
+
+Let's now look at the output of the `anova` function
+
+```{r}
+anova(CatMod)
+```
+
+Notice how there is now just a single predictor (Xcat) rather than separate 
+predictors for each binary subcategory.
+
+The equation for this ANOVA can be written the same as the regression model:
+
+$$ Y_i \sim \beta_0 + \beta_1 X_i + \epsilon_i$$
+
+We just have to keep in mind that the $\beta_1 X_i$ term is the mean of each 
+category, rather than a slope.
+
+# Quality Checks
+
+- normality of residuals
+- homogeneity of variance acrosss precitors
+
+
+
