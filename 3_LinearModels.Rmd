@@ -1,5 +1,5 @@
 ---
-title: "Permutation Tests"
+title: "Linear Models"
 output: html_document
 ---
 
@@ -28,7 +28,7 @@ str(InDat)
 ```
 
 The structure function `str()` is a handy way to inspect the data, but it 
-doesn't show us all the different values for the categorical columns. We can 
+doesn't show us all the different values for the nominal (i.e. categorical) columns. We can 
 use the `unique()` function for that. We could apply it to each column 
 or we can use the `dplyr()` function from the [data science](https://colauttilab.github.io/RCrashCourse/5_datascience.html) tutorial
 
@@ -38,7 +38,7 @@ InDat %>%
   unique()
 ```
 
-This gives us every combination of the categorical variables. In this case, we 
+This gives us every combination of the nominal variables. In this case, we 
 can see that most of the different `Scenario` categories are only applied to the 
 high `Nutrient` treatment. 
 
@@ -84,7 +84,7 @@ We saw that data can come in a few flavours:
 
   * **Binary** -- Boolean variables with two possible states, such as 
   1 or 0, true/false, yes/no
-  * **Categorical** -- Variables with two or more categories (e.g. treatment)
+  * **Nominal** -- Variables with two or more categories (e.g. treatment)
   * **Continuous** -- Measurements that can take on a range of values (e.g. height)
   * **Ordinal** -- Discrete categories but ordered in some way (e.g. number of 
   offspring)
@@ -99,8 +99,8 @@ type of input data they use. Importantly, Linear Models have two types of input:
   
 Linear Models will always have a single, continuous response variable, but it 
 can have one or more predictor variables that may include a mix of binary, 
-categorical and continuous variables. Ordinal variables are a bit more tricky, 
-and will be treated as (approximately) categorical or continuous variables, 
+nominal and continuous variables. Ordinal variables are a bit more tricky, 
+and will be treated as (approximately) nominal or continuous variables, 
 depending on the nature of the data. 
 
 ## Formula
@@ -149,7 +149,7 @@ set.seed(234)
 Xcon<-rnorm(1000)
 ```
 
-## Categorical
+## Nominal
 
 A categorical response variable (Xcat). 
 
@@ -163,9 +163,9 @@ Xcat<-sample(c("A","B","C"),1000, replace=T)
 
 ## Ordinal
 
-What about ordinal data? There are models that can handle this kind of data 
-but usually we have to make a choice whether to treat it as categorical or 
-continuous. 
+What about ordinal data? There are more advanced models that can handle this 
+kind of data but we can also run them in a linear model if we make a choice 
+whether to treat it as categorical or continuous. 
 
 For example, if we were looking at offspring numbers in Canadian 
 moose, most would have 0, 1 or 2, but some would have 3 or more. We could 
@@ -263,7 +263,7 @@ head(Resid)
 Accounting for this error, fully describes each point, giving the correct 
 Linear Model equation: 
 
-$$ Y_i \sim \beta_0 + \beta_1 X_i + \epsilon_i$$
+$$ Y_i = \beta_0 + \beta_1 X_i + \epsilon_i$$
 
 Our regression model has three important vectors:
 
@@ -426,15 +426,409 @@ predictors for each binary subcategory.
 
 The equation for this ANOVA can be written the same as the regression model:
 
-$$ Y_i \sim \beta_0 + \beta_1 X_i + \epsilon_i$$
+$$ Y_i = \beta_0 + \beta_1 X_i + \epsilon_i$$
 
-We just have to keep in mind that the $\beta_1 X_i$ term is the mean of each 
-category, rather than a slope.
+We just have to keep in mind that $X_i$ is a nominal variable with N categories 
+recoded as N-1 binary variables. $\beta_0$ is the mean of one category of data (Intercept). 
+There are N-1 $\beta_1$ terms specifying the deviation of each group from the Intercept.
 
-# Quality Checks
+> NOTE: The `lm` funciton chooses the category for $\beta_0$ as the first in alphabetical order
 
-- normality of residuals
-- homogeneity of variance acrosss precitors
+Contrast this with a continuous variable where $\beta_1$ is a single value for 
+the slope, which is multiplied by $X_i$
+
+# 2+ predictors
+
+So far we have looked at models with a single predictor. What if we have 2 or 
+more predictors?
+
+We can simply add additional predictor $X$ terms to our linear model 
+
+$$ Y_i = \beta_0 + \beta_1 X_{1,i} + \beta_2 X_{2,i} + ... + \epsilon_i$$
+
+There are a few specific 'flavours' of these models, as shown below. You should 
+know these because they are still used in the scientific literature, but remember 
+that they are just different combinations of predictor variables:
+
+  * **ANCOVA** -- **nominal** + **continuous** predictors
+  * **Multifactor ANOVA** -- 2 or more **nominal** predictors
+  * **Multiple regression** -- 2 or more **continuous** predictors
+  * **Polynomical regression** -- 1 or more continuous predictors raised to 2 or 
+  more powers
+
+## Build-a-model
+
+Now that you understand the basic structure of a linear model, let's build one 
+using simulated data in R, with a few different parameters we can adjust to see 
+how these changes affect the output of `lm`. 
+
+In some of the above models, we made $Y$ *independent* of $X$ by randomly sampling 
+$Y$ from a normal distribution. In the models below, we will make $Y$ *dependent* 
+on the predictors.
+
+In each case, we'll look at the linear model equation, and code it in R.
+
+## ANCOVA
+
+ANCOVA is short for ANalysis of COVariance, meaning it is is an ANOVA (nominal 
+predictor $cat$) combined with a covariate (continuous predictor $con$).
+
+$$ Y_i = \beta_0 + \beta_{cat} X_{cat,i} + \beta_{con} X_{con,i} + \epsilon_i$$
+
+Let's imagine a cancer drug trial where we want to test the effect of a drug (+ placebo) 
+and we want to include age as a covariate. Our response variable would have to be 
+a continuous measurement -- let's say tumor growth.
+
+First, let's create our predictor variables
+
+```{r}
+N<-1000 # Sample Size
+Beta0<-0 # Overall mean
+BetaCon<-0.03 # Slope of our continuous variable
+SimDat<-data.frame(
+  Treat=sample(c("Drug","Placebo"), N, replace=T), # Treatment
+  Age=sample(18:80, N, replace=T), # Age (between 18 and 80 years)
+  Err=rnorm(N, mean=0, sd=1) # Individual error with a mean of 0 and sd of 1
+) %>%
+  mutate(TreatMean=recode(Treat,"Drug"=-0.5,"Placebo"=1.2)) # Means of treatments
+head(SimDat)
+```
+
+Now we just plug those into our linear model equation to generate our dependent 
+variable Growth. Then plot the data and run `lm`:
+
+```{r}
+SimDat<-SimDat %>%
+  mutate(Growth = Beta0 + TreatMean + BetaCon*Age + Err)
+
+qplot(x=Age, y=Growth, colour=Treat, data=SimDat) + geom_smooth(method="lm")
+GrowthMod<-lm(Growth ~ Age + Treat, data=SimDat)
+anova(GrowthMod)
+summary(GrowthMod)
+```
+
+> Try changing the parameters below re-running the code above. How 
+does the graph and statstical output change?
+
+  * `N` -- Sample Size
+  * `Beta0` # Overall mean
+  * `BetaCo`n # Slope of our continuous variable
+  * `Err=rnorm(..., mean=??, sd=??)` # mean & sd of error term
+  * `TreatMean=recode(Treat,"Drug"=??,"Placebo"=??))` # Means of treatments
+
+
+## Multifactor ANOVA
+
+A multifactor ANOVA is an analysis of variance with 2 or more categories. For 
+example, if we wanted to test tumour growth from three chemicals on male vs female mice. 
+
+$$ Y_i = \beta_0 + \beta_1 X_{1,i} + \beta_2 X_{2,i} + \epsilon_i$$
+
+```{r}
+N<-1000 # Sample Size
+Beta0<-0 # Overall mean
+SimDat<-data.frame(
+  Treat=sample(c("Control","DrugA","DrugB","DrugC"), N, replace=T), # Treatment
+  Sex=sample(c("M","F"), N, replace=T), # Sex
+  Err=rnorm(N, mean=0, sd=1) # Individual error with a mean of 0 and sd of 1
+) %>%
+  mutate(TreatMean=recode(Treat,"Control"=0,"DrugA"=1.2,"DrugB"=-2,"DrugC"=0),
+         SexMean=recode(Sex,"M"=0.5,"F"=-0.5)) # Means of treatments
+head(SimDat)
+```
+
+```{r}
+SimDat<-SimDat %>%
+  mutate(Growth = Beta0 + TreatMean + SexMean + Err)
+
+qplot(x=Treat, y=Growth, fill=Sex, data=SimDat, geom="boxplot") + geom_smooth(method="lm")
+GrowthMod<-lm(Growth ~ Sex + Treat, data=SimDat)
+anova(GrowthMod)
+summary(GrowthMod)
+```
+
+## Multiple regression
+
+A multiple regression is just a regression with 2+ continuous predictors. 
+
+> CHALLENGE: Make up an experiment with two predictors and try to encode them
+
+$$ Y_i = \beta_0 + \beta_1 X_{1,i} + \beta_2 X_{2,i} + \epsilon_i$$
+
+```{r}
+N<-1000 # Sample Size
+Beta0<-0 # Overall mean
+SlopeA<-0.3 # Slope for 1st continuous predictor
+SlopeB<- -0.4 # Slope for 2nd continuous predictor
+SimDat<-data.frame(
+  TreatA=sample(0:100,N, replace=T),
+  TreatB=sample(0:100,N, replace=T),
+  Err=rnorm(N, mean=0, sd=1) # Individual error with a mean of 0 and sd of 1
+) %>%
+  mutate(Growth = Beta0 + SlopeA*TreatA + SlopeB*TreatB + Err)
+```
+
+Visualizing the model is tricky because we have two predictors now. We could 
+plot each separately on the x-axis, or we could scale point size to one of them
+
+```{r}
+qplot(x=TreatA, y=Growth, data=SimDat) + geom_smooth(method="lm")
+qplot(x=TreatB, y=Growth, data=SimDat) + geom_smooth(method="lm")
+GrowthMod<-lm(Growth ~ TreatA + TreatB, data=SimDat)
+anova(GrowthMod)
+summary(GrowthMod)
+```
+
+## Polynomial regression
+
+A polynomial regression is a special type of multiple regression where the 
+different predictors are polynomials of the same variable. 
+
+$$ Y_i = \beta_0 + \beta_1 X_{1,i} + \beta_2 X^2_{1,i} + \beta_n X^n_{1,i} + ... + \epsilon_i$$
+This is easier to understand with an example. 
+
+Let's say we want to look at the relationship between plant 
+height and plant biomass, with biomass following a quadratic relationship:
+
+```{r}
+N<-1000 # Sample Size
+Beta0<-0 # Overall mean
+SlopeA<-0.3 # Slope for 1st continuous predictor
+SlopeB<- -0.4 # Slope for 2nd (quadratic) predictor
+SimDat<-data.frame(
+  Height=sample(c(0:1000)/100,N, replace=T),
+  Err=rnorm(N, mean=0, sd=1) # Individual error with a mean of 0 and sd of 1
+) %>%
+  mutate(Biomass = Beta0 + SlopeA*Height + SlopeB*Height^2 + Err)
+
+qplot(x=Height, y=Biomass, data=SimDat) + geom_smooth(method="lm")
+```
+
+To fit a polynomial, we use the Identity `I` function inside the lm
+
+```{r}
+GrowthMod<-lm(Biomass ~ Height + I(Height^2) , data=SimDat)
+anova(GrowthMod)
+summary(GrowthMod)
+```
+
+Let's look at a qubic relationship for comparison:
+
+```{r}
+SlopeC<- -2
+SimDat<-SimDat %>%
+  mutate(Biomass2 = Beta0 + SlopeA*Height + SlopeB*Height^2 + SlopeC*Height^3 + Err)
+```
+
+```{r}
+GrowthMod<-lm(Biomass2 ~ Height + I(Height^2) + I(Height^3), data=SimDat)
+anova(GrowthMod)
+summary(GrowthMod)
+```
+
+Notice that our third polynomial is not significant, even though it should be 
+because of our linear model. The reason for this is complicated, but it has to 
+do with the fact that the polynomial predictors are not independent.
+
+We can solve this problem with the `poly()` function, but note that it changes 
+the estimates.
+
+
+```{r}
+GrowthMod<-lm(Biomass2 ~ poly(Height,degree=3), data=SimDat)
+anova(GrowthMod)
+summary(GrowthMod)
+```
+We can also add the polynomial term to `ggplot` object if we use the `formula` 
+parameter in `geom_smooth`
+
+```{r}
+qplot(x=Height, y=Biomass2, data=SimDat) + geom_smooth(formula=y ~ poly(x,3, raw=TRUE))
+```
+
+
+# Quality Control
+
+The key assumption of our linear models is:
+
+**residual error follows a normal distribution with a mean of zero**
+
+AND
+
+**error variance is independent of predictors**
+
+There are a few convenient ways to check this, but first, let's set up a few 
+models, starting with a base dataset.
+
+
+```{r}
+N<-1000
+B0<-0
+B1<-0.03
+TestDat<-data.frame(
+  PredCon=sample(c(1:100)/10,N,replace=T),
+  PredNom=sample(c("A","B","C"), N, replace=T),
+  Err=rnorm(N, mean=0, sd=1)
+) %>% 
+  mutate(PredNomMean=recode(PredNom,"A"=-1,"B"=1,"C"=0)) %>%
+  mutate(Response=B0+B1*PredCon+PredNomMean+Err)
+
+TestMod<-lm(Response ~ PredCon + PredNom, data=TestDat)
+anova(TestMod)
+summary(TestMod)
+```
+
+This model should meet our assumptions, but let's check. There are three main 
+ways to do this, all using the residuals of our model, which we can calculate 
+manually, or use the `residuals` function on our model object.
+
+## Histogram
+
+```{r}
+qplot(residuals(TestMod))
+```
+
+This looks normal, and is senered around zero, but what is a normal distribution 
+supposed to look like? We can use our `qnorm` function to generate the expected 
+quantile of each observation. We could then plot the observed vs. expected values.
+
+This is called the quantile-quantile or q-q plot
+
+## Q-Q Plot
+
+The Quantile-Quantile (Q-Q) Plot bins the residuals the same way we would for a 
+histogram, but then calculates the number of observations we expect in each bin 
+for a normal distribution. If the data are perfectly normal, then all the points 
+will fall along the 1:1 line
+
+```{r}
+qplot(sample=residuals(TestMod)) + stat_qq() + stat_qq_line()
+```
+
+We can see some very slight deviation from the line at the extreme values, where 
+we have a small sample size
+
+## Homoskedasticity
+
+The last test is to make sure that variance is constant across our predictors. 
+We can do this for each predictor variable alone, as well as the overall prediction 
+from the model. To do this, let's add residuals to the dataset:
+
+```{r}
+TestDat$Residuals<-residuals(TestMod)
+qplot(x=PredCon, y=Residuals, data=TestDat)
+qplot(x=PredNom, y=Residuals, data=TestDat, geom="boxplot")
+```
+
+Note how the variance is similar range, centred at zero across all values of x 
+in both graphs. We should also not see any correlation between the x- and y- axes.
+
+We can also generate the predicted values using the estimates from the linear 
+model output. But an easier way is the `predict()` function.
+
+```{r}
+TestDat$Predicted<-predict(TestMod)
+qplot(x=Predicted, y=Residuals, data=TestDat)
+```
+
+Since we have continuous + nominal predictors we want to make sure that each 
+group is centered at zero with similar variance with no correlations between 
+the x- and y-axis.
+
+
+# Violations
+
+Let's make a couple of models that violate the assumptions for comparison.
+
+## Nonlinear relationship
+
+The first example is the one above -- fitting a linear model to a quadratic relationship
+
+```{r}
+# Make a new response variable
+TestDat<-TestDat %>% 
+  mutate(Response2=B0+B1*PredCon+0.2*PredCon^2+PredNomMean+Err)
+
+# Run the linear model
+TestMod2<-lm(Response2 ~ PredCon + PredNom, data=TestDat)
+
+# Calculate predictions and residuals of the linear model
+TestDat$Predicted2<-predict(TestMod2)
+TestDat$Residuals2<-residuals(TestMod2)
+
+# Plot to look for problems
+qplot(x=Residuals2, data=TestDat) # Histogram 
+qplot(sample=Residuals2, data=TestDat) + stat_qq() + stat_qq_line() # QQPlot
+qplot(x=PredCon, y=Residuals2, data=TestDat)
+qplot(x=PredNom, y=Residuals2, data=TestDat, geom="boxplot")
+qplot(x=Predicted2, y=Residuals2, data=TestDat)
+```
+
+## Log-normal response
+
+```{r}
+# Make a new response variable
+TestDat<-TestDat %>% 
+  mutate(Response3=exp(B0+B1*PredCon+PredNomMean+Err))
+
+# Run the linear model
+TestMod3<-lm(Response3 ~ PredCon + PredNom, data=TestDat)
+
+# Calculate predictions and residuals of the linear model
+TestDat$Predicted3<-predict(TestMod3)
+TestDat$Residuals3<-residuals(TestMod3)
+
+# Plot to look for problems
+qplot(x=Residuals3, data=TestDat) # Histogram 
+qplot(sample=Residuals3, data=TestDat) + stat_qq() + stat_qq_line() # QQPlot
+qplot(x=PredCon, y=Residuals3, data=TestDat)
+qplot(x=PredNom, y=Residuals3, data=TestDat, geom="boxplot")
+qplot(x=Predicted, y=Residuals3, data=TestDat)
+```
+
+## Error scales with prediction
+
+```{r}
+# Make a new response variable
+TestDat<-TestDat %>% 
+  mutate(Response4=B0+B1*PredCon*Err+PredNomMean*Err/10)
+
+# Run the linear model
+TestMod4<-lm(Response4 ~ PredCon + PredNom, data=TestDat)
+
+# Calculate predictions and residuals of the linear model
+TestDat$Predicted4<-predict(TestMod4)
+TestDat$Residuals4<-residuals(TestMod4)
+
+# Plot to look for problems
+qplot(x=Residuals4, data=TestDat) # Histogram 
+qplot(sample=Residuals4, data=TestDat) + stat_qq() + stat_qq_line() # QQPlot
+qplot(x=PredCon, y=Residuals4, data=TestDat)
+qplot(x=PredNom, y=Residuals4, data=TestDat, geom="boxplot")
+qplot(x=Predicted, y=Residuals4, data=TestDat)
+```
+
+## Poisson Error
+
+```{r}
+# Make a new response variable
+TestDat<-TestDat %>% 
+  mutate(Response5=B0+B1*PredCon+PredNomMean+rpois(N,lambda=1))
+
+# Run the linear model
+TestMod5<-lm(Response5 ~ PredCon + PredNom, data=TestDat)
+
+# Calculate predictions and residuals of the linear model
+TestDat$Predicted5<-predict(TestMod5)
+TestDat$Residuals5<-residuals(TestMod5)
+
+# Plot to look for problems
+qplot(x=Residuals5, data=TestDat) # Histogram 
+qplot(sample=Residuals5, data=TestDat) + stat_qq() + stat_qq_line() # QQPlot
+qplot(x=PredCon, y=Residuals5, data=TestDat)
+qplot(x=PredNom, y=Residuals5, data=TestDat, geom="boxplot")
+qplot(x=Predicted, y=Residuals5, data=TestDat)
+```
 
 
 
