@@ -670,7 +670,7 @@ TestDat<-data.frame(
   PredNom=sample(c("A","B","C"), N, replace=T),
   Err=rnorm(N, mean=0, sd=1)
 ) %>% 
-  mutate(PredNomMean=recode(PredNom,"A"=-1,"B"=1,"C"=0)) %>%
+  mutate(PredNomMean=recode(PredNom,"A"=-5,"B"=5,"C"=0)) %>%
   mutate(Response=B0+B1*PredCon+PredNomMean+Err)
 
 TestMod<-lm(Response ~ PredCon + PredNom, data=TestDat)
@@ -830,5 +830,21 @@ qplot(x=PredNom, y=Residuals5, data=TestDat, geom="boxplot")
 qplot(x=Predicted, y=Residuals5, data=TestDat)
 ```
 
+## Residuals matter most
 
+Note that in our analysis above, we are analyzing the RESIDUALS. Our assumptions 
+with linear models are about the residuals NOT the predictor or response variables.
+
+Let's look back at our original, well-behaved model as an example. Compare the 
+histograms of the residuals with the response and predictors:
+
+```{r}
+qplot(residuals(TestMod))
+qplot(TestDat$Response) 
+qplot(TestDat$PredCon) 
+qplot(TestDat$PredNom) 
+```
+
+There is nothing wrong with the sample! It doesn't matter that the predictors and 
+response are not normally distributed, as long as the residuals are.
 
