@@ -224,6 +224,7 @@ This gives us the equation for the estimated line, which would be okay if every
 single observation fell exactly on the line of best fit. We can plot for comparison:
 
 ```{r}
+CCplot
 CCplot + geom_abline(slope=0.033, intercept=0.017, colour="red")
 ```
 
@@ -541,7 +542,7 @@ head(SimDat)
 SimDat<-SimDat %>%
   mutate(Growth = Beta0 + TreatMean + SexMean + Err)
 
-qplot(x=Treat, y=Growth, fill=Sex, data=SimDat, geom="boxplot") + geom_smooth(method="lm")
+qplot(x=Treat, y=Growth, fill=Sex, data=SimDat, geom="boxplot")
 GrowthMod<-lm(Growth ~ Sex + Treat, data=SimDat)
 anova(GrowthMod)
 summary(GrowthMod)
