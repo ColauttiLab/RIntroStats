@@ -648,7 +648,7 @@ qplot(x=Height, y=Biomass2, data=SimDat) + geom_smooth(formula=y ~ poly(x,3, raw
 ```
 
 
-# Quality Control
+# Quality Checks
 
 The key assumption of our linear models is:
 
