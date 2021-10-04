@@ -1,0 +1,221 @@
+---
+title: "Advanced Linear Models"
+output: html_document
+---
+
+# Overview
+
+Here we will build on a base understanding of linear models in R using the `lm()` function. In the [Introduciton to Linear Models Tutorial](https://colauttilab.github.io/RIntroStats/3_LinearModels.html) we reviewed the basic structure of linear models, which have a single continuous **response** or **dependent** variable and one or more **predictor** or **independent** variables. We walked through some specific examples, noting how they are all special cases of the linear model. 
+
+# Setup
+
+Load libraries and custom plotting theme
+
+```{r, message=F}
+library(ggplot2) # plotting library
+library(dplyr) # data management
+
+source("http://bit.ly/theme_pub") # Set custom plotting theme
+theme_set(theme_pub())
+```
+
+
+## Predictor variables
+
+```{r}
+TestDat<-data.frame(
+  PredCon=rnorm(1000),
+  PredNom=sample(c("A","B"),1000,replace=T),
+  Err=rnorm(1000)
+)
+```
+
+Now we set up our response variable:
+
+```{r}
+Beta0<-10 # Intercept
+Beta1<-1.3 # Slope of the continuous predictor
+TestDat<-TestDat %>% 
+  mutate(PredNomMean=recode(PredNom,"A"=-1,"B"=1))# Means of the categorical predictor
+```
+
+# Interaction terms
+
+Any model with two or more predictors has the potential for interaction terms. The interaction term means that we multiply the two values together and then by a new coefficient:
+
+$$ Y_i \sim \beta_0 + \beta_1 X_{1,i} + \beta_2 X_{2,i} + \beta_3X_{1,i}X_{2,i}$$
+
+So we can calculate our response variable and add it to the dataset:
+
+```{r}
+Beta3=1.2
+TestDat<-TestDat %>%
+  mutate(Resp=Beta0+Beta1*PredCon+PredNomMean+Beta3*PredCon*PredNomMean+Err)
+```
+
+Using the `lm` function in R, we denote the interaction using a colon `:`.
+
+```{r}
+Mod1<-lm(Resp~PredCon+PredNom+PredCon:PredNom, data=TestDat)
+anova(Mod1)
+summary(Mod1)
+```
+
+Note that the interaction term gets its own test statistic. Looking at the **Estimate** column in the summary we can see that `PredNomA` is missing, meaning that it is the overall intercept, `PredCon` is the slope of the continuous variable for the A group ONLY. To get the equation for the B group, we have to first add PredNomB to the intercept (9 + 2 = 11), which gives us our intercept for the B group. To get the slope of group B we add the interaction term to the slope for group A (0.16 + 2.4). We can use ggplot to visualize this:
+
+## Visualizing interactions
+
+```{r}
+ggplot(aes(x=PredCon,y=Resp, group=PredNom),data=TestDat) +
+  geom_point(aes(colour=PredNom)) + geom_smooth(method="lm")
+```
+
+The `geom_smooth()` function fit separate lines for each of the `group=` categories in the ggplot function. We can see the steeper slope an higher intercept for the B group (remember that the intercept is the value of Y when x=0).
+
+## Two Categorical Predictors
+
+The above example is for one categorical + one continuous, but what if we have two categorical variables?
+
+```{r}
+TestDat<-TestDat %>%
+  mutate(PredNom2 = sample(c("Hot","Cold"),1000, replace=T)) %>%
+  mutate(PredNom2Mean = recode(PredNom2,"Hot"=2,"Cold"=-2)) %>%
+  mutate(RespCat = Beta0 + PredNomMean + PredNom2Mean + 
+           Beta3*PredNomMean*PredNom2Mean + Err)
+```
+
+```{r}
+Mod2<-lm(RespCat ~ PredNom + PredNom2 + PredNom:PredNom2, data=TestDat)
+anova(Mod2)
+summary(Mod2)
+```
+
+Looking at the summary, we can see that the intercept is calculated for Group A in the Cold treatment, with a mean of 9.4 for that group. All the other group means are calculated as deviations. For example, the B group in the Cold treatment is 9.4 + (-2.8) = 6.6 and the B group in the Hot treatment is 9.4 + (-2.8) + 9.6 = 16.2
+
+We can see the means with ggplot (or qplot):
+
+```{r}
+qplot(x=PredNom,fill=PredNom2,y=RespCat,geom="boxplot",data=TestDat)
+```
+
+## Two Continuous Predictors
+
+Let's now consider two continuous predictors
+
+```{r}
+Beta2<- -2
+TestDat<-TestDat %>%
+  mutate(PredCon2=rnorm(1000)) %>%
+  mutate(RespCon=Beta0 + Beta1*PredCon + Beta2*PredCon2 +
+           Beta3*PredCon*PredCon2 + Err)
+```
+
+```{r}
+Mod3<-lm(RespCon ~ PredCon + PredCon2 + PredCon:PredCon2, data=TestDat)
+anova(Mod3)
+summary(Mod3)
+```
+
+Again, we see in the **Estimate** column, the overall intercept, and the slope for the PredCon variable. But now, we have the slope for PredCon2 (not the deviation in slope) and the interaction term.
+
+The interaction term for two continuous variables is more difficult to visualize than the two previous cases. This is a good example of how math can be so useful, as a single term can explain this fairly complex relationship.
+
+Let's plot out our two continuous predictor variables and then scale/colour the points based on the predicted value from the model:
+
+```{r}
+ggplot(aes(x=PredCon,y=PredCon2),data=TestDat) +
+  geom_point(aes(colour=predict(Mod3),size=predict(Mod3)),alpha=0.3)
+```
+
+You can see that the smallest points are in the top left and the largest are in the bottom right. This is what we expect given the slopes, but there is a bit of curvature that we can see with the larger points in the top right and bottom left.
+
+Another way to think about this is by setting different values for one of the continuous variables to see how the slope changes. In this case, we will calculate the slope of the regression when our second predictor is at -2, 0 and +2:
+
+```{r}
+ggplot(aes(x=PredCon,y=RespCon,colour=PredCon2),data=TestDat) +
+  geom_point() +
+  geom_abline(intercept=10,slope=1.3+1.2*(0),colour="yellow") + # when PredCon2=0
+  geom_abline(intercept=10,slope=1.3+1.2*(-2),colour="red") + # when PredCon2=-2
+  geom_abline(intercept=10,slope=1.3+1.2*(2),colour="green") # when PredCon2=2
+```
+
+## `*` Shorthand
+
+In larger linear models, we may have multiple predictors and it can become very long to write out all the individual terms and there intereactions. For example, if we have 3 predictors $X_1$, $X_2$ and $X_3$ we would have to write:
+
+```{r, eval=F}
+lm(Y ~ X1 + X2 + X3 +
+     X1:X2 + X1:X3 + X2:X3 +
+     X1:X2:X3)
+```
+
+We can use the shorthand `*` in `lm` to represent the interaction AND its individual terms. So, the above model could be written simply as:
+
+```{r, eval=F}
+lm(Y ~ X1*X2*X3)
+```
+
+From this example, we can also see how complicated our models can get as we add more predictors with more interaction terms. 
+
+# Collinearity
+
+Collinearity occurs when two or more variables have similar predictive value. An easy way to think about this is when you have one predictor variable that is a function of two or more variables. One way to test for collinearity, is to calculate the correlations among predictor variables. If you have high correlation then you should think if/how you can exclude one of the variables.
+
+In addition, think whether some variables are just combinations of others. Here's an example:
+
+```{r}
+B<-rnorm(1000)
+C<-rnorm(1000)
+A<-B+C
+cor(A,B)
+cor(A,C)
+```
+
+C is a function of A and B, but there is enough variable in each that the correlation is not too strong. However, if we put all of these in a linear model, we can have problems:
+
+```{r}
+Y<-10+0.2*B+1.2*C+rnorm(100)
+Mod6<-lm(Y ~ A + B + C)
+summary(Mod6)
+```
+
+Notice the `NA` in our predictor, which is a **red flag** in the output of any linear model. IN this case, we get estimates for A and B, so adding C into the model adds no predictive power because C = A-B.
+
+A similar problem can occur when two predictors are highly correlated, but not completely co-linear
+
+```{r}
+A<-B+C+rnorm(1000,sd=0.001)
+
+Y<-10+0.2*B+1.2*C+rnorm(100)
+Mod6<-lm(Y ~ A + B + C)
+summary(Mod6)
+```
+
+In this case we don't get any NA values, but note how the P-values for A, B AND C are all non-significant. Even though they would be if we ran separate models:
+
+```{r}
+summary(lm(Y~A))
+summary(lm(Y~B))
+summary(lm(Y~C))
+```
+
+## Dealing with Collinearity  
+
+The best way to deal with collinearity is to think carefully about the predictor variables you put into your model. If a predictor variable can itself be predicted by one or more other predictor variables, then it's best to exclude from the model. Deciding which variable to exclude depends on the specific biology of the system you are studying. There is no simple formula you can use, unfortunately.
+
+Sometimes predictors are ALMOST collinear, but there is enough variation to test which predictor is a better predictor. We can do this with model selection.
+
+# Model selection
+
+So far, we have framed linear models as significant or non-significant. 
+
+
+# $R^2$
+
+## LRT
+
+hierarchical
+
+## AIC
+
+# Experimental design? or later?
