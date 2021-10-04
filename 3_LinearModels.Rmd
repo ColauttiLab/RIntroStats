@@ -837,15 +837,58 @@ Note that in our analysis above, we are analyzing the RESIDUALS. Our assumptions
 with linear models are about the residuals NOT the predictor or response variables.
 
 Let's look back at our original, well-behaved model as an example. Compare the 
-histograms of the residuals with the response and predictors:
+histograms of the response and predictors:
 
 ```{r}
-qplot(residuals(TestMod))
 qplot(TestDat$Response) 
 qplot(TestDat$PredCon) 
 qplot(TestDat$PredNom) 
 ```
 
-There is nothing wrong with the sample! It doesn't matter that the predictors and 
-response are not normally distributed, as long as the residuals are.
+In the case of our continuous variable, we have a tri-modal distribution. But 
+remember that our residuals look normally distributed:
+
+```{r}
+qplot(residuals(TestMod))
+qplot(sample=residuals(TestMod)) + stat_qq() + stat_qq_line()
+```
+
+There is nothing wrong with the sample or the model! It doesn't matter that the 
+predictors and response are not normally distributed, as long as the residuals are.
+
+> Why is there a trimodal distribution in the response variable but not the residuals?
+
+We have three groups with different means, showing up in the response as three peaks. 
+When we take out the means by including the predictor in our linear model, then the 
+residuals are the deviation from the group means, resulting in a single peak.
+
+# QC Tools
+
+Once you understand how these quality checks work, there are some tools you can use to 
+quickly plot and view the diagnostic graphs. 
+
+The `autoplot()` function in the`ggfortify` package is a nice complement to `ggplot` 
+for generating diagnostic graphs. You can even colour code your predictors:
+
+```{r, echo=F}
+knitr::opts_chunk$set(fig.width=12, fig.height=8) 
+```
+
+
+```{r}
+library(ggfortify)
+autoplot(TestMod, which=1:4, data=TestDat, colour = 'PredNom')
+```
+
+Note the **Cook's distance** plot. This checks whether you have a few **outlier** 
+data points that contribute disproportionately to the fit of the model. The row 
+numbers are shown for potential outliers, but looking at the figure we can see 
+that the Cook's distance measure is not much higher for these then several other 
+points. Try adding an outlier to the `TestDat` dataset to see what this would 
+look like in the Cook's distance plot.
+
+You can generate other analytical plots with the `which` function. See `?autoplot` 
+for more detail.
+
+
 
