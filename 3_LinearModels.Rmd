@@ -7,7 +7,7 @@ output: html_document
 
 Load libraries and our custom plotting theme.
 
-```{r, message=F}
+```{r, message=F, warning=F}
 library(ggplot2) # plotting library
 library(dplyr) # data management
 
@@ -491,7 +491,7 @@ SimDat<-data.frame(
   Age=sample(18:80, N, replace=T), # Age (between 18 and 80 years)
   Err=rnorm(N, mean=0, sd=1) # Individual error with a mean of 0 and sd of 1
 ) %>%
-  mutate(TreatMean=recode(Treat,"Drug"=-0.5,"Placebo"=1.2)) # Means of treatments
+  mutate(TreatMean=recode(Treat,"Drug"=0,"Placebo"=1.2)) # Means of treatments
 head(SimDat)
 ```
 
@@ -534,7 +534,7 @@ SimDat<-data.frame(
   Err=rnorm(N, mean=0, sd=1) # Individual error with a mean of 0 and sd of 1
 ) %>%
   mutate(TreatMean=recode(Treat,"Control"=0,"DrugA"=1.2,"DrugB"=-2,"DrugC"=0),
-         SexMean=recode(Sex,"M"=0.5,"F"=-0.5)) # Means of treatments
+         SexMean=recode(Sex,"M"=0.5,"F"=0)) # Means of treatments
 head(SimDat)
 ```
 
@@ -671,7 +671,7 @@ TestDat<-data.frame(
   PredNom=sample(c("A","B","C"), N, replace=T),
   Err=rnorm(N, mean=0, sd=1)
 ) %>% 
-  mutate(PredNomMean=recode(PredNom,"A"=-5,"B"=5,"C"=0)) %>%
+  mutate(PredNomMean=recode(PredNom,"A"=0,"B"=5,"C"=-5)) %>%
   mutate(Response=B0+B1*PredCon+PredNomMean+Err)
 
 TestMod<-lm(Response ~ PredCon + PredNom, data=TestDat)
