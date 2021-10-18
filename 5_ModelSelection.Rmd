@@ -1,0 +1,267 @@
+---
+title: "Model Selection"
+output: html_document
+---
+
+# Outline
+
+We can think of each linear model as a specific hypothesis defined by the variables input into the model. By convention, we reject the null hypothesis in favour of the alternative hypothesis. In the [Advanced Linear Models Tutorial](./4_AdvancedLM.html) we looked at some of the problems with this approach. In particular, the problem of false-positives (aka Type I error) is amplified in the scientific literature. The Type I error occurs when the null hypothesis is falsely rejected. For example, if we find a significant effect of a new drug but in reality the drug has no effect. These errors are amplified because most studies that fail to reject a null do not ever get published.
+
+But there is another way to think about statistical hypotheses. Instead of having a simple true/false or pass/fail or significant/non-significant binary outcome, we can take a different approach using model selection. In this case we are testing among many different alternative hypotheses instead of just rejecting (or failing to reject) a single hypothesis.
+
+Although these represent different philosophies, in practice the difference usually comes down to the type of data. The 'classic' approach of null hypothesis testing is common in experiments with smaller sample sizes and  a few, tightly controlled variables. Model selection is more common in large datasets with many observations and many potential predictor variables.
+
+You will need to refer back to the [Model Selection Metrics](https://colauttilab.github.io/RIntroStats/4_AdvancedLM.html#Model_Selection) in the Advanced Linear Models tutorial.
+
+# Setup
+
+Load libraries and custom plotting theme
+
+```{r, message=F}
+library(ggplot2) # plotting library
+library(dplyr) # data management
+
+source("http://bit.ly/theme_pub") # Set custom plotting theme
+theme_set(theme_pub())
+```
+
+We are also going to use two new libraries: `lmtest` for our `l`inear `m`odel `test`ing and `MuMIn` for `Mu`lti `M`odel `In`ference and model selection. We also use `MASS` from the 2002 book `M`odern `A`pplied `S`tatistics with `S`. S is another programming language that R is based on. Don't forget to use `install.packages()` to update/install these before you load the `library()` for the first time.
+
+```{r}
+library(lmtest)
+library(MuMIn)
+library(MASS)
+```
+
+# LRT
+
+The Likelihood Ratio Test (LRT) compares the likelihood of two models. The likelihood ratio statistic follows a chi-squred distribution with degrees of freedom equal to the difference in the number of parameters. 
+
+$$\chi^2 = -2\ln(\frac{\theta_0}{\theta_1})$$
+
+To run a likelihood ratio test, we can use a function from the `lmtest` library
+
+```{r}
+library(lmtest)
+```
+
+Let's run an example with completely random numbers but different number of predictors, then we run the LRT using the `lrtest` function:
+
+```{r, warning=F}
+Y<-rnorm(1000)
+X1<-rnorm(1000)
+X2<-rnorm(1000)
+X3<-rnorm(1000)
+Mod1<-lm(Y ~ X1 + X2 + X3)
+Mod2<-lm(Y ~ X1)
+lrtest(Mod2,Mod1)
+```
+
+Now run the above code a bunch of times and compare the output. 
+
+Each time we get the same number of degrees of freedom (`#Df`): 5 in model 2 and 3 in model 1. We get the same *difference* in degrees of freedom (`Df`) of 2 because there are 2 more predictors in Mod1 than Mod2.
+
+The `Chisq` is -2 times the $ln$ of the ratio of the `LogLik` values. We can then calculate the probability from the chi-square distribution. For example, if we have 1.09 in our Chisq above, with 2 df for the difference in parameters:
+
+```{r}
+pchisq(q=1.09,df=2, lower.tail=F)
+```
+
+The LogLik is the natural-log-scaled likelihood of the model. The likelihood describes how well the data fit the model (how likely is the model given the data), so the specific likelihood depends on the scatter of points around the prediction of the model (in this case, a single or multiple regression). **The Likelihood is a probability**. Specifically, it's the probability you would observe these exact data if the model is true. So if the `LogLik` is -140, then the likelihood of the model is the exponential $e^{-140}$, or approximately:
+
+$$0.000000000000000000000000000000000000000000000000000000000000158 $$
+
+That's a very small probability! But that doesn't mean that the model is unlikely. It's the same probability you might get if you flip a coin 1000 times and ask: "what's the probability you would get EXACTLY 500 heads and 500 tails?" What if we only flip the coin 1 or 10 times?
+
+Any specific outcome becomes less likely as the sample size increases, but that doesn't mean the model is wrong! That's why we have to compare probabilities. We only have 1 set of observations (`Y`), but we can ask the probability of observing that data for any given statistical model.
+
+Of course in this case, we also get a low likelihood of the model because we are choosing random variables with no association. 
+
+> NOTE: Why do we use a natural-log scale? 
+
+The main reason is that computers are not very good at working with small numbers. For example:
+
+```{r}
+exp(-1)
+exp(-10)
+exp(-100)
+exp(-1000)
+```
+
+Note that $e^{-1000}$ is a very small number, but it's not zero!
+
+
+# AICc & BIC
+
+We can similarly compare models with information criteria using AIC
+
+```{r}
+AIC(Mod1)
+AIC(Mod2)
+AIC(Mod1) - AIC(Mod2)
+```
+
+and we can convert this to a probability. The smaller model (Mod2) is about 
+
+```{r}
+exp(0.5*AIC(Mod2)-0.5*AIC(Mod1))
+```
+
+times as probable as the larger model (Mod1)
+
+Likewise, we can do model selection with BIC:
+
+```{r}
+BIC(Mod1)
+BIC(Mod2)
+BIC(Mod1) - BIC(Mod2)
+```
+
+Remember the basic rule of thumb is that models are equivalent if their delta (difference in AIC or BIC) is less than 2. If the difference is bigger than 2, then we choose the model with the smaller AIC or BIC.
+
+> Try re-running the code to randomly generate the variables above, then re-run the LRT, AIC and BIC to compare the results. How often do you get a non-signifcant LRT but a delta AIC or BIC bigger than 2?
+
+Now that we've simulated an example to compare the two main approaches for model fitting and model selection, let's look at some automated methods.
+
+# Model Selection Overview 
+
+## Forward Selection
+
+With forward selection you add variables one at a time and compare the fit of the model to decide if the predictor should stay in the model in the next round. Typically, we might:
+
+  1. Start with the most basic model
+  2. Do a model selection with each term on its own
+  3. Add the term with the model that fits best
+  4. Repeat until no terms improve the fit of the model
+
+## Backward Selection
+
+Backward selection starts with all of the variables in the model and then removes predictors one at a time to test the fit of the model. In biological research, this is a commonly done using the LRT with nested models:
+
+  1. Put all parameters in the model
+  2. Remove one parameter at a time, starting with the most complex interaction terms
+  3. If the LRT is significant, then leave the parameter in
+  4. If an interaction is significant, then ALL of the terms in the interaction should also be retained in the model
+
+The LRT with backward selection is a common approach in Biology when there aren't too many predictors, and the models are nested.
+
+## Dredging
+
+This is a general term for comparing many models. The idea is you are running your statistical tool through the muck of models to find something valuable. If you have many predictor variables you would not typically include interaction terms because this would greatly increase the number of models you would have to test. As you can imagine, the more models you test the more likely you are to find a spurious relationship. Nevertheless, this can be a powerful approach as long as you are careful about interpretation (e.g. run follow-up experiments to test significant relationships). If you have a large dataset, you can split it into a 'training' dataset and a 'validation' dataset. In this case, you would dredge the training dataset and then validate the model on the validation dataset. This is a common approach in machine learning and is covered other tutorials.
+
+
+# Examples
+
+The `MuMIn` and `MASS` packages in R have some convenient functions for running model selection
+
+```{r}
+library(MuMIn)
+library(MASS)
+```
+
+We will try these different approaches on the [FallopiaData.csv](https://colauttilab.github.io/RCrashCourse/FallopiaData.csv). These are plant biomass data for different species competing in pots. 
+
+```{r}
+InDat<-read.csv("https://colauttilab.github.io/RCrashCourse/FallopiaData.csv")
+str(InDat)
+```
+
+WARNING: There are several columns that are calculated from other columns. Including everything will give us problems due to collinearity (see [Collinearity](https://colauttilab.github.io/RIntroStats/4_AdvancedLM.html#Collinearity) in the Advanced LM tutorial).
+
+In particular, these columns should be excluded from the model selection:
+
+  * All_Natives
+  * Total
+  * Pct_Fallopia
+
+## Forward Selection
+
+Let's see how well we can predict total biomass. We already know that this is calculated as the sum of all other plant biomasses, so to prevent co-linearity we will only look at the biomass of the native plants (i.e. exclude Fallopia and the treatment columns).
+
+The first step is to specify the full model. We'll add in a random variable
+
+```{r}
+set.seed(4567)
+InDat$RAND<-rnorm(nrow(InDat))
+MinMod<-lm(Total ~ 1, data=InDat)
+FullMod<-lm(Total ~ Symphytum + Silene + Urtica + Geranium + Geum 
+            + RAND, data=InDat)
+```
+
+Then we can use the `stepAIC` function for stepwise selection using AIC
+
+```{r}
+ForSel<-stepAIC(MinMod, scope=formula(FullMod), direction="forward")
+summary(ForSel)
+```
+
+From the output, we can see the AIC for each model, and go down until the difference is < 2. 
+
+## Backward Selection
+
+It's almost trivial to adapt the code above for backward
+
+```{r}
+BackSel<-stepAIC(FullMod, direction="backward")
+summary(BackSel)
+```
+
+## Forward + Backward
+
+When there is some degree of collinearity in the predictors, then the Forward and Backward selection can miss the 'best' model because it only tests one predictor at a time.
+
+We can combine methods for a more robust model testing.
+
+```{r}
+BothSel<-stepAIC(MinMod, scope=formula(FullMod), direction="both")
+summary(BothSel)
+```
+
+Now we see many 'base' models showing how the fit changes as we add (+) or remove (-) from each base models.
+
+
+## Interactions
+
+Interactions add a lot of complexity to model fitting. Here's an example with just four variables:
+
+```{r}
+ComplexMod<-lm(Total ~ Symphytum*Silene*Urtica*RAND, data=InDat)
+CplxSel<-stepAIC(MinMod, scope=formula(ComplexMod), direction="both")
+summary(CplxSel)
+```
+
+# Dredging
+
+The `dredge` function from the `MuMIn` package is useful for testing all possible models. It has several additional parameters to help with model selection. An important one is `beta=`. This is a method for standardizing the beta (coefficients) estimates so that they can be compared across models.
+
+```{r, error=T}
+ComplexMod<-lm(Total ~ Symphytum*Silene*Urtica*RAND, data=InDat)
+DMod<-dredge(ComplexMod, beta="sd")
+```
+
+Note the error. This is an important warning about missing data. In our case, there are no missing data, but this error prevents us from accidentally comparing models with different numbers of parameters. To run the model, we should set our global options to 'na.fail' instead of 'na.omit':
+
+```{r}
+options(na.action="na.fail")
+DMod<-dredge(ComplexMod, beta="sd")
+head(DMod)
+```
+The output include ALL of the models, so here we just look at the AICc, delta AICc and coefficients of the top models.
+
+
+# QA/QC
+
+As always, we should inspect the residuals of the model to look for problems and test the assumptions as outlined in the [QC section of the Linear Models tutorial](https://colauttilab.github.io/RIntroStats/3_LinearModels.html#QC_Tools). We also make sure there are no missing values in the columns used in our models
+
+Finally, we should also check the overall fit if our best model. The reason to do this is that there will always be a 'best fit' model in our model selection analysis, even if all the models are complete garbage. A good way to do this is to compare the prediction of the model against the observed values. The better the model, the more tightly the points will form a line with the observed values:
+
+```{r}
+qplot(x=predict(Mod2), y=Y) + xlab("Predicted") + ylab("Observed")
+qplot(x=predict(ComplexMod),y=InDat$Total) + xlab("Predicted") + ylab("Observed")
+```
+
+
+
+
+
+
