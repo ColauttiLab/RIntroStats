@@ -265,7 +265,7 @@ $$ Specificity = \frac{TN}{TN+FP} \times 100 \%$$
 
 So far, we have framed linear models as significant or non-significant. But there are some problems with this approach, including the False Discovery problem and a few others outlined in this nice [YouTube video](https://youtu.be/42QuXLucH3Q) from Veritasium, and in this paper by John Ioannidis in [PLoS Medicine](https://journals.plos.org/plosmedicine/article?id=10.1371/journal.pmed.0020124.
 
-An alternate approach to running mutliple independent models is to test multiple models to see which one is best supported by the data. Each model represents a different hypothesis, so **model selection is a way to test among alternative hypotheses**, rather than just testing a series of single hypotheses against the null.
+An alternate approach to running multiple independent models is to test multiple models to see which one is best supported by the data. Each model represents a different hypothesis, so **model selection is a way to test among alternative hypotheses**, rather than just testing a series of single hypotheses against the null.
 
 ## Goodness-of-Fit
 
