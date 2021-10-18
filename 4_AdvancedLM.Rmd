@@ -5,7 +5,7 @@ output: html_document
 
 # Overview
 
-Here we will build on a base understanding of linear models in R using the `lm()` function. In the [Introduciton to Linear Models Tutorial](https://colauttilab.github.io/RIntroStats/3_LinearModels.html) we reviewed the basic structure of linear models, which have a single continuous **response** or **dependent** variable and one or more **predictor** or **independent** variables. We walked through some specific examples, noting how they are all special cases of the linear model. 
+Here we will build on a base understanding of linear models in R using the `lm()` function. In the [Introduction to Linear Models Tutorial](https://colauttilab.github.io/RIntroStats/3_LinearModels.html) we reviewed the basic structure of linear models, which have a single continuous **response** or **dependent** variable and one or more **predictor** or **independent** variables. We walked through some specific examples, noting how they are all special cases of the linear model. 
 
 # Setup
 
