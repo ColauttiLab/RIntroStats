@@ -140,7 +140,8 @@ Backward selection starts with all of the variables in the model and then remove
 
   1. Put all parameters in the model
   2. Remove one parameter at a time, starting with the most complex interaction terms
-  3. If the LRT is significant, then leave the parameter in
+  3. If you are using Information Criteria, keep the model with lower score (better fit)
+      * If you are using the LRT then leave the parameter in only if the LRT is significant (i.e. leaving the parameter in the model is a significantly better fit)
   4. If an interaction is significant, then ALL of the terms in the interaction should also be retained in the model
 
 The LRT with backward selection is a common approach in Biology when there aren't too many predictors, and the models are nested.
