@@ -1,0 +1,163 @@
+---
+title: "Generalized Linear Models"
+output: html_document
+---
+
+# Overview
+
+Linear models are run in R using the `lm()` function, as we saw detailed in the [Linear Models Tutorial](https://colauttilab.github.io/RIntroStats/3_LinearModels.html). In that tutorial, we also saw a wide range of 'classical' statistical models that differ only in the type of predictor variables (e.g. ANOVA for categorical and regression for continuous). 
+
+We also learned how to inspect our residuals to make sure that they don't violate model assumptions. One of the most important is that the error term follows a normal distribution with a mean of zero.
+
+**Generalized Linear Models** use the `glm()` function in R, and can be used when our residuals DO NOT follow a normal distribution. If you understand how `lm` works, then `glm` will be very easy to understand. If you are still struggling with `lm` then it's a good idea to go back and review/practice before continuing.
+
+A good way to think of a **Generalized Linear Model** is a regular linear model that has been transformed by a **Link** function. A link function is just another equation that we use to transform the linear model. We'll show how this works for Logistic Regression (binomial response variable) and Poisson Regression (log-normal or count response variable).
+
+# Setup
+
+Load libraries and custom plotting theme
+
+```{r, message=F}
+library(ggplot2) # plotting library
+library(dplyr) # data management
+
+source("http://bit.ly/theme_pub") # Set custom plotting theme
+theme_set(theme_pub())
+```
+
+# Normal Residuals
+
+Let's start with a typical linear model by generating pretend data:
+
+```{r}
+N<-1000
+X1<-rnorm(N, sd=3)
+X2<-sample(c("Control","Treat1"), N, replace=T)
+tDat<-data.frame(Pred1=X1, Pred2=X2) %>%
+  mutate(Pred2mean=recode(Pred2, "Control"=0, "Treat1"=4)) %>%
+  mutate(Resp= -1 + 0.3*Pred1 + Pred2mean + rnorm(N, sd=2))
+```
+
+This is similar to the models we set up in the [Linear Models Tutorial](https://colauttilab.github.io/RIntroStats/3_LinearModels.html), where we have a sample size of N = 1000, we have a continuous predictor and we have a categorical predictor. Our response variable is a function of the predictors with a slope of $0.3 \times X_1$ and a random normal error. We add the strings for the treatment category so that we can run the linear model.
+
+## LM
+
+```{r}
+Mod<-lm(Resp~Pred1 + Pred2, data=tDat)
+summary(Mod)
+```
+
+Recall that the model is:
+
+$$ Y = \beta_0 + \beta_1*X_1 + \beta_2X_2 + \epsilon $$
+
+where $Y$ is a vector (e.g. column in a data frame) containing the response values for each individual, $\Beta_0$ is the intercept of the model, $\beta_1$ is the slope of the predictor $X_1$, which is also a vector containing values for the first predictor. $\beta_2$ is likewise the slope for the vector of predictor $X_2$ and $\epsilon$ is the residual error term.
+
+
+The key assumption that distinguishes `lm` from `glm` is that our residual error is normally distributed:
+
+```{r}
+qplot(residuals(Mod))
+```
+
+## GLM
+
+We can fit the same model using GLM. Compare this code to the `lm` model, above:
+
+```{r}
+GLMod<-glm(Resp~Pred1 + Pred2, family=gaussian, data=tDat)
+```
+
+Note the addition of the `family=` parameter. Here we use gaussian, which is actually the default so technically we don't need to specify it for this model. However, we include it here since it is the main parameter that changes depending on the distribution of the response variable.
+
+Now compare the output:
+
+```{r}
+summary(GLMod)
+```
+
+
+It should be very similar, but you'll notice that there is no p-value for the overall model. But, there is an AIC that we can use for model selection, or we can do the likelihood ratio test. You can review these in the [Model Selection Tutorial](https://colauttilab.github.io/RIntroStats/5_ModelSelection.html) if you need a refresher.
+
+```{r}
+library(lmtest)
+GLMod2<-glm(Resp~Pred1, data=tDat)
+lrtest(GLMod2,GLMod)
+```
+
+Now what if our residuals are not from a random normal distribution? First, make sure you review the [Distributions Tutorial](https://colauttilab.github.io/RIntroStats/1_Distributions.html).
+
+# Logistic
+
+A **Logistic Regression** is similar to a linear regression in `lm()` except that the response variable is binary rather than continuous. This means that values of the response variable must be either 0 or 1. This is also known as a Bernoulli variable. Going back to our [Distributions Tutorial](https://colauttilab.github.io/RIntroStats/1_Distributions.html) you may recall that we can sample from a random binomial distribution with the `rbinom` distribution. In this case, the 'size' parameter is just 1 because each response observation is a 0 or 1. But to generate a statistical model, we have to define the probability of 0 and 1. We also have to make sure that the probabilities add up to 1. In a logistic regression this is done with a transformation of the linear model (Y) to a probability (P). This is called Link function:
+
+## Link Function
+
+$$P = \frac{1}{1+e^{-Y}} $$
+
+Or more specifically:
+$$ P = \frac{1}{1+e^{-(\beta_0 + \beta_1*X_1 + \beta_2X_2 + \epsilon)}} $$
+
+```{r}
+Logist<-1/(1+exp(-tDat$Resp))
+qplot(x=tDat$Resp,y=Logist)
+```
+
+Notice how the y-axis runs from 0 to 1, which we can think of as a probability of observing 1 in the dataset. Now we can input that probability 
+
+```{r}
+tDat<-tDat %>%
+  mutate(LResp=rbinom(n=N, size=1, prob=Logist))
+```
+
+To run the `glm` model, we have to specify that this is a logistic model, rather than Gaussian.
+
+```{r}
+LMod<-glm(LResp ~ Pred1 + Pred2, family=binomial, data=tDat)
+summary(LMod)
+```
+
+Note how the estimates are very similar to the gaussian model **BUT REMEMBER** that to generate our predictions we have to transform our linear model using the equation above. You can see the difference by re-running the model with `lm` (without the family parameter) and seeing how the Estimate values differ.
+
+As with the gaussian distribution, we can use LRT to determine the significance of specific terms or models, or AIC for more general model selection.
+
+
+# Poisson
+
+Poisson variables are common for count data (e.g. N offspring) but also can apply to log-normally distributed data with continuous measurements (e.g. biomass).
+
+If we look at `rpois()` to sample from a Poisson distribution, we can see the term lambda, which is the mean of the poisson distribution. In a Poisson distribution, the variance (e.g. residual error) scales with the mean. Specifically, the prediction is on the natural-log scale:
+
+## Link Function
+
+$$ N = e^{Y}$$
+
+Or the more detailed version:
+
+$$ N = e^{\beta_0 + \beta_1*X_1 + \beta_2X_2 + \epsilon}$$
+
+Similar to the logistic regression, we transform the model using this equation.
+
+```{r}
+Lambda<-exp(tDat$Resp)+1
+tDat<-tDat %>% 
+  mutate(PResp=rpois(N, lambda=Lambda))
+```
+
+And we can plot to better understand the relationship
+
+```{r}
+qplot(x=Resp,y=PResp,data=tDat)
+```
+
+Now run the model and compare the output.
+
+```{r}
+PMod<-glm(PResp ~ Pred1 + Pred2, family=poisson, data=tDat)
+summary(PMod)
+```
+
+# Other GLMs
+
+`?family` provides a list of families that you can use with `glm` and related models. 
+
