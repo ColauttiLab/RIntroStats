@@ -34,8 +34,8 @@ N<-1000
 X1<-rnorm(N, sd=3)
 X2<-sample(c("Control","Treat1"), N, replace=T)
 tDat<-data.frame(Pred1=X1, Pred2=X2) %>%
-  mutate(Pred2mean=recode(Pred2, "Control"=0, "Treat1"=4)) %>%
-  mutate(Resp= -1 + 0.3*Pred1 + Pred2mean + rnorm(N, sd=2))
+  mutate(Pred2dev=recode(Pred2, "Control"=0, "Treat1"=4)) %>%
+  mutate(Resp= -1 + 0.3*Pred1 + Pred2dev + rnorm(N, sd=2))
 ```
 
 This is similar to the models we set up in the [Linear Models Tutorial](https://colauttilab.github.io/RIntroStats/3_LinearModels.html), where we have a sample size of N = 1000, we have a continuous predictor and we have a categorical predictor. Our response variable is a function of the predictors with a slope of $0.3 \times X_1$ and a random normal error. We add the strings for the treatment category so that we can run the linear model.
@@ -79,7 +79,7 @@ summary(GLMod)
 
 It should be very similar, but you'll notice that there is no p-value for the overall model. But, there is an AIC that we can use for model selection, or we can do the likelihood ratio test. You can review these in the [Model Selection Tutorial](https://colauttilab.github.io/RIntroStats/5_ModelSelection.html) if you need a refresher.
 
-```{r}
+```{r, warning=F}
 library(lmtest)
 GLMod2<-glm(Resp~Pred1, data=tDat)
 lrtest(GLMod2,GLMod)
@@ -96,18 +96,20 @@ A **Logistic Regression** is similar to a linear regression in `lm()` except tha
 $$P = \frac{1}{1+e^{-Y}} $$
 
 Or more specifically:
-$$ P = \frac{1}{1+e^{-(\beta_0 + \beta_1*X_1 + \beta_2X_2 + \epsilon)}} $$
+$$ P = \frac{1}{1+e^{-(\beta_0 + \beta_1*X_1 + \beta_2X_2)}}  $$
+
+Note that the residual error is not part of the link function
 
 ```{r}
-Logist<-1/(1+exp(-tDat$Resp))
-qplot(x=tDat$Resp,y=Logist)
+Logit<-1/(1+exp(-(-1 + 0.3*tDat$Pred1 + tDat$Pred2dev)))
+qplot(x=tDat$Resp,y=Logit)
 ```
 
 Notice how the y-axis runs from 0 to 1, which we can think of as a probability of observing 1 in the dataset. Now we can input that probability 
 
 ```{r}
 tDat<-tDat %>%
-  mutate(LResp=rbinom(n=N, size=1, prob=Logist))
+  mutate(LResp=rbinom(n=N, size=1, prob=Logit))
 ```
 
 To run the `glm` model, we have to specify that this is a logistic model, rather than Gaussian.
@@ -134,14 +136,14 @@ $$ N = e^{Y}$$
 
 Or the more detailed version:
 
-$$ N = e^{\beta_0 + \beta_1*X_1 + \beta_2X_2 + \epsilon}$$
+$$ N = e^{\beta_0 + \beta_1*X_1 + \beta_2X_2}$$
 
 Similar to the logistic regression, we transform the model using this equation.
 
 ```{r}
-Lambda<-exp(tDat$Resp)+1
+Log<-exp(-1 + 0.3*tDat$Pred1 + tDat$Pred2dev)
 tDat<-tDat %>% 
-  mutate(PResp=rpois(N, lambda=Lambda))
+  mutate(PResp=rpois(N, lambda=Log))
 ```
 
 And we can plot to better understand the relationship
@@ -160,4 +162,23 @@ summary(PMod)
 # Other GLMs
 
 `?family` provides a list of families that you can use with `glm` and related models. 
+
+# Model Selection
+
+Sometimes the link function is obvious given the data. For example, a response variable with 1 and 0 would be a binomial function in our example above. But sometimes it's not so easy. For example, other families not covered here can give the same response data type. In these cases, we can use information criteria to test the fit of different models. We can see an example of this for our poisson model:
+
+```{r}
+GausMod<-glm(PResp ~ Pred1 + Pred2, family=gaussian, data=tDat)
+PoisMod<-glm(PResp ~ Pred1 + Pred2, family=poisson, data=tDat)
+AIC(GausMod)
+AIC(PoisMod)
+```
+We can see the model with the poisson link fits much better than the model with the gaussian link.
+
+> Why can't we use a likelihood ratio test? 
+
+HINT: Think about the parameters in a LRT
+
+
+
 
