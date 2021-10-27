@@ -275,6 +275,7 @@ Central Limit Theorem to estimate a predicted range for the population mean of
 a Gaussian distribution.
 
 $$ SE = \frac{s}{\sqrt N}$$
+
 ## Confidence Interval
 
 The confidence interval (CI) is a range of two values (high/low) that we predict should 
