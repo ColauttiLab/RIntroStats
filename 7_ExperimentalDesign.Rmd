@@ -1,0 +1,190 @@
+---
+title: "Experimental Design"
+output: html_document
+---
+
+# Overview
+
+By now, you should be very comfortable with sample and population distributions, central moments, and generalized linear models. In this tutorial, we are going to look at experimental design, which will be quite a change of pace -- there is almost no coding and almost no math in this tutorial (just a little bit).
+
+> Why discuss experimental design now rather than at the beginning?
+
+Understanding the structure of linear models will help you design better experiments and make better decisions in your analysis of existing data.
+
+First, we will look at some common problems in existing datasets. Then, we will discuss some remedies, and how these relate to different aspects of a linear model.
+
+Before continuing, take a minute to imagine that you are responsible for designing an experiment. Pick any question and imagine that money and resources are not limited. What kind of experiment would you design? What elements should you include? What factors do you need to consider? What will your design actually look like?
+
+Now imagine that you do have limitations on sample size, measurements, and treatments. How does this influence your design?
+
+Below is a brief outline of some key considerations and design elements. This is intended as a short reference guide that you can use to design better experiments or improve your analysis of existing data.
+
+# Bias
+
+Bias in statistics is a systemic problem with the data collection or analysis that can lead to incorrect conclusions (e.g. Type I or Type II errors).
+
+More specifically, if you think back to the [Distributions Tutorial](https://colauttilab.github.io/RIntroStats/1_Distributions.html) we defined the *population* as the complete set of individuals and the *sample* as a random subset of the population. In order to use statistical methods on our measured sample to infer something about the population it represents, we assume that the sample is random and unbiased.
+
+Therefore, a bias in statistics is anything that causes the sample to systematically deviate from the population.
+
+> Think of some examples of a statistical bias in a biological study
+
+## Artifacts 
+
+One common source of bias in biological studies is the presence of experimental artifacts. An experimental artifact is just a feature of the specific experimental conditions that produces an unintended effect. 
+
+There are many potential examples. Maybe you made a mistake in your growth media or drug concentration. Maybe a key instrument was miscalibrated or not functioning properly. Maybe your samples are mislabeled. These are all common sources of bias.
+
+## Confounding Variables
+
+A confounding variable is a source of bias that prevents proper causal inference.
+
+You may have heard the popular phrase "Correlation does not imply causation". This means that you shouldn't infer A affects B just because B is correlated with A. Confounding variables are the reason for this. Both A and B may not interact at all but still be correlated because both are affected by C.
+
+**Time** is a variable to be particularly skeptical about. The reason is that so many things are simultaneously changing over time, that it can be very difficult to link cause and effect. Think about this next time you see a graph that shows two variables changing over time. Here are some fun examples from [Buzzfeed](https://www.buzzfeednews.com/article/kjh2110/the-10-most-bizarre-correlations, and some even more bizzare examples on [tylervigen.com](https://www.tylervigen.com/spurious-correlations)
+
+Biological studies range from the very carefully controlled (e.g. tissue culture) to almost completely uncontrolled (e.g. field observations). Despite the broad range of manipulation in biological experiments, all are prone to confounding variables.
+
+## Solutions
+
+In linear models, we can try to account for confounding variables by including them in the analysis. Of course, this requires that we are able to identify and measure the confounding variable. And if there are too many confounding variables, then we might not have enough power to test them all.
+
+It can be very difficult to account for experimental artifacts unless they are confounding variables that can be measured and included in the analysis.
+
+Overall, the best solution is to think very carefully about sources of bias, and try to eliminate them at the experimental design stage. 
+
+# Design Elements
+
+## Treatments
+
+Treatments are usually imposed by the experimenter. For example, you may test different concentrations of a chemical or stimulus in a controlled environment. But treatments can also be 'imposed' in observational experiments. For example, we might compare plants that have natural colonized wet vs dry environments or we might compare genotypes of an invasive species sampled from its native vs introduced range.
+
+**Control** treatments are among the most important. Sometimes they are obvious (e.g. placebo) but other times they may not be. For example, if you want to test the effectiveness of a pesticide, what is your control group? It could range from doing nothing to spraying with water or water + the surfactant used to dissolve the herbicide. What if you just want to exclude herbivores to see how they affect plant growth? Which conrol would you use?
+
+Treatments are typically encoded as categorical variables in linear models. However, if treatments fall along a gradient (e.g. concentration) then they can sometimes be analyzed as a continuous variable to fit some known or hypothesized relationship. This is common in enzyme kinetics, for example.
+
+## Randomization
+
+When treatments are imposed, then we can randomly assign individuals to different treatments. This is called randomization. 
+
+R can be a great tool for randomizing individuals. For example, let's say we want to randomly assign 100 individuals into 1 of 4 groups:
+
+```{r}
+sample(c(1:4),100,replace=T)
+```
+
+### Haphazard
+
+Haphazard is the more appropriate term to use when a human 'randomly' assigns individuals to treatments.
+
+A different term is used because humans are very bad at generating random numbers. Here's a quick test: randomly choose 100 numbers from 1 to 100 and write them into a vector in R. Then plot a histogram and see if they follow a uniform distribution. Now use `qplot(x=runif(100))` and compare the distribution to the one you made.
+
+## Balance
+
+One big problem with true randomization is that we can get uneven sample sizes in our treatments, which can be a big problem. In an extreme case, we could end up with a treatment that has no individuals in it. But even less extreme cases can be problematic.
+
+Recall from our distributions tutorial that the the population mean falls within $\pm 1.96 \times$ the standard error. The standard error is the standard deviation divided by the square root of the sample size. 
+
+So smaller samples have more variable standard errors.
+
+In a balanced design, all treatments have equal sample size, which gives the most power to detect an effect.
+
+## Replication
+
+One way to keep samples balanced while still having an element of randomization is to use replicates. A replicate is just an experimental unit on which a treatment is repeated, and **independent** of other units. 
+
+For example, we might be testing the effect of a drug on mouse behaviour. We would of course want multiple mice for each treatment, so each mouse would be a replicate.
+
+## Pseudoreplication
+
+Pseudoreplication occurs when something looks replicated at first but upon further inspection the replicates are not independent. This is often due to a confounding variable. For example, if we have 100 cells growing in two petri dishes (treatment + control), we have only 1 replicate because the 100 cells are pseudoreplicated within a petri dish.
+
+Statistically, we can account for pseudoreplication using mixed models and other advanced statistics.
+
+## Blocking
+
+Blocking is a good way to control confounding variables by replicating treatments over space and time. Importantly, treatments are replicated ACROSS blocks, but often randomly assigned WITHIN blocks.
+
+For example, if we are growing plants in a greenhouse, we might have experimental blocks that correspond to greenhouse benches. If we have 10 benches, then we have 10 experimental blocks. But within a block, we have the same number of treatments (e.g. 100 control + 100 treatment), randomly assigned to each individual. 
+
+Statistically, we can include block as a factor in our linear models. 
+
+## Blinding
+
+Blinding is common in clinical trial studies but (surprisingly) rare in many other experimental studies. Single-blind studies are those in which the subjects do not know which treatment they have been assigned to (e.g. drug vs placebo). This is important in humans because simply thinking they are taking a drug can affect their response. This is less relevant for studies of plants and animals, which presumably don't know (or don't care) which treatment they are part of.
+
+However, double-blind studies are those in which the experimenters who are administering the treatment and collecting the data are also blind to the treatments. This IS relevant to plant and animal studies because the experimenter may slightly adjust their observation (often subconsciously) to match their expectation.
+
+Double-blind studies are not common outside of clinical trials, but they should be!
+
+In large experiments with many experimenters, we can actually include the individual as a 'blocking' effect in our statistical models, to account for potential differences in the way observations are made in recorded.
+
+## Factorial Design
+
+A factorial design is just like a factorial ANOVA, except that it must include every combination of factors. For example, if we test the effect of two treatments on mice, we may want to include an equal number of male and female mice in each treatment. 
+
+Statistically, a balanced factorial design is a powerful way to look for non-additive effects. For example, if a treatment affects male and female mice differently, then there would be a significant treatment-by-sex interaction term in the model.
+
+## Nested Design
+
+A nested design is like a factorial design except that the factors are hierarchical. 
+
+Genetic studies often include a nested design. For example, imagine corn breeding study where we have pedigree information. We may have many seeds from different natural populations sampled from South America. Within each population we may have different parental families (i.e. individuals who share the same mother and father). In this example, we could analyze the effect of family, nested within population. 
+
+Nested designs are a good way to account for pseudoreplication. In this example, two seeds from the same plant share the same mother and father, so they are genetically more similar than the expected similarity of two randomly chosen seeds. 
+
+Statistically, nested designs are often analyzed with mixed models. Models that account for non-independence of samples are not pseudoreplicated. 
+
+# Pilot Study
+
+We have often discussed the importance of sample size in our statistical models. Sample size determines the ability of our model to detect a biological effect. 
+
+One key question in experimental design is therefore: what should our sample size be?
+
+Obviously, bigger is better. But every experiment has logistic constraints, so a better question is: Will my sample size be big enough to detect an effect?
+
+That depends on the desired precision and power of the experiment.
+
+## Precision
+
+Precision is a measure of dispersion. A statistical parameter (e.g. slope) is more precise if it has a small confidence interval (CI) and less precise if it has a larger CI.
+
+In a parametric model, the CI is $\pm 1.96 \times SE$, which is $\pm 1.96 \times (\frac{s}{\sqrt N})$
+
+Since precision is the inverse of CI, a higher N yields a more precise measurement. But this also depends on the standard deviation of the sample ($\s$), which in turn depends on the standard deviation of the population ($\sigma$)
+
+## Power
+
+Power is related to precision, but instead of a confidence interval, we are interested in detecting an effect. Specifically, power is the probability to detect an effect at a specific level of alpha, given a particular sample size. Alpha is similar to the p-value of a model except that it applies to the population comparison -- similar to the distinction between $s$ and $\theta$.
+
+# Sample Size
+
+Because power and precision depend on the confidence interval (CI), we can reorganize the equation to figure out what sample size we would need for a given power or precision. 
+
+First, remember what the CI is: The 95% CI for an estimated parameter is the range of values that we would expect to find the true parameter in 95% of the tests that we ran.
+
+So we can set the CI as a number representing the range (e.g. 10 cm or 30 mg) and rearrange our equation to determine a sample size. In the case of a normally distributed parameter, the width ($R$) of the CI is:
+
+$$ R =  2\times1.96\frac{\sigma}{\sqrt{N}}$$
+
+If we round 1.96 to 2 and solve for sample size, we get:
+
+$$N = 16(\frac{\sigma}{R})^2 $$
+
+To find a good sample size for the experiment, we can estimate $\sigma$ as $s$ in a pilot experiment.
+
+Note that R could be the range of a confidence interval or the difference between groups. 
+
+But this is only an estimate because $s$ may be an over- or under-estimate of $\sigma$
+
+## Data Loss
+
+In most experiments there will be some observations that are lots. Plants die, patients drop out of studies, and data collectors make mistakes that may require data to be removed from the analysis.
+
+It's important to keep this in mind when designing an experiment. When desiging your experiment, it's important to think about what might cause your sample size to decline, and what you can do to meet a target sample size by the end of the experiment --and ideally keep treatments balanced.
+
+# Summary
+
+There's a lot that goes into experimental design. Think of it more like designing a building or a car. The more thought you put into it, and the more feedback you get, the better your design will be.
+
+
