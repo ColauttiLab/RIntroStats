@@ -1,0 +1,416 @@
+---
+title: "Mixed Models"
+output: html_document
+---
+
+# Overview
+
+So far, we've seen how linear mixed models are a general class of statistical models that include a number of classical models (e.g. ANOVA, Regression). We then made the `lm()` linear model framework even more general to define generalized linear models with `glm()` that allow us to analyze response variables that are drawn from binary or Poisson distributions (or a few other distributions that we didn't get into). 
+
+In this tutorial, we expand the Generalized Linear Models to include a new kind of estimate called a **Random Effect**. The "Effects" are the predictor variable(s) and the Fixed vs Random effects differ in the way their effects are estimated.  To understand the difference, we first define the estimates used in `lm` and `glm` as **Fixed Effects**. These are explained in more detail below, with examples to demonstrates the difference.
+
+
+# Fixed or Random?
+
+To determine whether a predictor should be a fixed or random effect, ask yourself two questions:
+
+> Is my hypothesis about these specific groups or estimates (Fixed Effects)?
+
+OR
+
+> Are these groups or estimates repesentative of a larger population (Random Effects)?
+
+# Setup
+
+Load libraries and custom plotting theme
+
+```{r, message=F}
+library(ggplot2) # plotting library
+library(dplyr) # data management
+
+source("http://bit.ly/theme_pub") # Set custom plotting theme
+theme_set(theme_pub())
+```
+
+## `lme4` & `nlme`
+
+There are two alternate packages available for mixed models in R. They have different syntax and slighlty different implementation. We'll use `lme4` for this tutorial, but `nlme` is another good option.
+
+```{r}
+library(lme4)
+```
+
+And we'll do some model selection using likelihood ratio tests, which uses the `lrtest()` function from the `lmtest` package
+
+```{r}
+library(lmtest)
+```
+
+
+## Data
+
+Load the dataset
+
+```{r}
+ImmuneDat<-read.csv("https://colauttilab.github.io/Data/ImmuneData.csv",header=T)
+```
+
+Inspect the Data:
+
+```{r}
+str(ImmuneDat)
+```
+
+This data measures the immune response to a vaccine given to 135 individuals, measured as the blood-level Immunoglobulin G (IgG) sampled in each patient over 18 months.
+
+  * IndID -- A unique identifier for each patient
+  * FamID -- The family ID each patient. Several individuals come from the same extended family (same maternal grandmother and grandfather).
+  * Time -- Month of measurement from 0 to 17
+  * Sex -- Male or Female in this dataset
+  * IgG -- Concentration of IgG in the blood
+  
+# Repeated Measures
+
+Take a careful look at the dataset and you'll see something that is different from most of the other datasets we've looked at.
+
+In the past examples, each row would contain observations for an individual (e.g. individual or pot), and each measurement would have its own column (e.g. size or biomass). **This is sometimes called the 'wide' format'**.
+
+In this dataset, each individual is measured at 18 different time points (t=0 to t=18). If you think of each time point as a separate column, then you might have each individual as a row and each time point as a column. But, we have something different here. Each row contains the measurement of an individual at a specific time point, so each individual has 18 rows. **This is sometimes called the 'long' format**.
+
+This is called a **Repeated Measures** design because measurements are repeated on the same subjects. In this case, we have multiple time measurements, but we would have a repeated measures design if we measured different traits on the same individuals -- for example, if we measured several different metabolites in the blood. These measurements are not indepdent of each other, because each individual is measured several times.
+
+Repeated measures are a good example of **pseudoreplication** -- a sample size that is inflated because observations are not independent. In theory, we should take measurements on different individuals if we are going to do a traditional linear model. However, this is logistically impractical. Luckily, we can used mixed models to account for non-independence of measurements.
+
+# Fixed Effects
+
+Both the `lm` and `glm` tutorials use fixed effects, we just didn't call them that. The effects are *fixed* because we estimate them directly from the data. 
+
+For example, we might run a linear model to look at sex differences in IgG at time = 0, when the blood concentration is highest. By looking at only the initial timepoint we can avoid problems of repeated measures on the same individual.
+
+```{r}
+InitIgG<-ImmuneDat %>% 
+  filter(Time==0)
+  
+LMod<-lm(IgG ~ Sex,InitIgG)
+summary(LMod)
+anova(LMod)
+```
+
+We have a significant effect of Sex on immune response...BUT
+
+Another key assumption of independent data points is violated in this model. We are treating each individual as an independent data point but we have genetic relatives. Two individuals from the same genetic family are genetically more similar than two individuals drawn at random. AND we would expect people from the same family to have a more similar response than two individuals chosen at random. 
+
+This is another good example of **pseudoreplication**. But instead of multiple measurements on the same individual, we have multiple measurements on the same genetic family.
+
+We can summarize the data to see this:
+
+```{r}
+InitIgG %>% 
+  group_by(FamID) %>%
+  summarize(n=length(IgG))
+```
+
+
+In the classic linear model framework, we could include family as a factor in our model:
+
+```{r}
+LMod2<-lm(IgG ~ Sex + FamID, data=InitIgG)
+summary(LMod2)
+anova(LMod2)
+```
+
+## CODING ERROR!
+
+Hold on a sec, there's something VERY wrong here in our summary output!
+
+> Find the error before proceeding
+
+We have 8 families, which means we should have 7 estimates in our summary (intercept + 7 means). But we only have one estimate for FamID -- why??
+
+This is a very common mistake and it occurs because of an error in the way we have defined our variables. Let's look again at the structure of our data:
+
+```{r}
+str(InitIgG)
+```
+
+FamID and IndID are integers because when R read in our data it saw that these columns only contain integers. In contrast, Sex is a string because it has two letter: M or F. By default, R treats integers as continuous data and strings as factors. So we need to redefine our ID columns as factors.
+
+```{r}
+InitIgG<-InitIgG %>% 
+  mutate(IndID=as.factor(IndID),
+         FamID=as.factor(FamID),
+         Sex=as.factor(Sex))
+str(InitIgG)
+```
+
+Now we can see there are 8 families and 135 individuals
+
+Don't forget to do it for the original dataset too!
+
+```{r}
+ImmuneDat<-ImmuneDat %>% 
+  mutate(IndID=as.factor(IndID),
+         FamID=as.factor(FamID),
+         Sex=as.factor(Sex))
+```
+
+## Correct LM
+
+Now our model should work properly
+
+```{r}
+LMod2<-lm(IgG ~ Sex + FamID, data=InitIgG)
+summary(LMod2)
+anova(LMod2)
+```
+
+In this case, the estimate of the Sex effect is different and the p-value for the Sex effect is much smaller (i.e. more significant). We also have a much larger Adjusted R-squared, meaning that the model explains more of the variation in the data. We can also see that some families are significantly different from the intercept but others are not.
+
+This is a better model but we have two more problems. First, we have to estimate several parameters, which increases the degrees of freedom, and therefore the statistical power of our model. It gets even worse if we want to test whether the difference between sexes is different for each family:
+
+```{r}
+LMod3<-lm(IgG ~ Sex*FamID, data=InitIgG)
+summary(LMod3)
+anova(LMod3)
+```
+
+Now we have 14 parameters -- and we're still only looking at one time point. If we wanted to fit a linear regression over time, we would need 8 more parameters for slope (one overall slope + 7 slope deviations). If we wanted to fit a quadratic (curved) response over time then we would need another 8 estimates for the squared (quadratic) term. That would be:
+
+  * 1 intercept +
+  * 1 regression slope + 
+  * 1 quadratic slope + 
+  * 7 group means +
+  * 7 group:sex means (intercepts) + 
+  * 7 linear slopes +
+  * 7 quadratic slopes
+  
+That's 30 parameters!
+
+Too many parameters is one problem. Another problem is the fact that we don't have a balanced sample (compare N of individuals for each family, above). When our samples are imbalanced, we can get big standard errors on our estimates, making them unreliable particularly for families with smaller sample sizes. 
+
+A third problem would arise if families differ in their variability. For example, imagine there is a gene that regulates the immune response, so that if we look at the variability in response among individuals, some families have a more variable response, and some have a less variable response. This would be heteroskedasticity -- another violation of linear models. In other words, the residual variances differ among families.
+
+Random effects solve all three of these problems.
+
+
+# Random Effects
+
+A random effect assume that the levels of a predictor are chosen at random from a larger population. Just as we sampled individual observations from a larger population in the [Distributions Tutorial](https://colauttilab.github.io/RIntroStats/1_Distributions.html) we can sample genetic families from a larger population of genetic families, and we can sample individuals within a family from a larger population of individuals in that family.
+
+That's where the term 'random effects' comes from: we are assuming that the different levels of a random effect are a random, unbiased sample from a larger population of effects.
+
+Instead of estimating each individual mean for a random effect, we assume the effects are drawn from a random distribution. As a result, we estimate a single term -- the variance -- rather than a separate term for each mean.
+
+# Linear Mixed Model
+
+The **Linear Mixed Model (LMM)**, aka the **Linear Mixed Effects (LME)** model is just a Linear Model (LM) with the addition of random effects.
+
+To run LMEs we will use the `lmer()` function from the `lme4` package. Another popular package is `nlme` The syntax is the same for the *fixed effects* but the *random effects* get a bit more complicated. 
+
+For now, let's ignore family-by-sex interactions and do the mixed-model equivalent of the linear model for sex + family effects:
+
+
+```{r}
+MMod<-lmer(IgG ~ Sex + (1 | FamID), data=InitIgG)
+summary(MMod)
+```
+
+The output is quite different, and it's important to understand the similarities and differences:
+
+First, look at the **Fixed Effects**. Compare the Estimate for the Intercept and Sex=M to the analogous linear model `lm(IgG ~ Sex + FamID)`. 
+
+Second, look at the **Random Effects**. Notice how there are no individual estimates for FamID, just a single Variance term. Note that there is also a Residual Variance term, which is the variance not explained by FamID. 
+
+# Variance Components
+
+You can think of random effects similar to the idea of an F-test in ANOVA in the sense that we are trying to account for variance of each predictor. Except that we are estimating the variance directly from the data, rather estimating a mean for each group and then calculating the sums of squares among group means.
+
+Those predictors can be independent of each other, or they can be hierarchical. Hierarchical random effects are called **Nested** effects. An example of a nested effect would be if several genetic families were randomly sampled from each of several randomly selected populations. Or in our cases, individuals were randomly sampled from each genetic family.
+
+Computationally, nested effects just avoid a simple problem with coding. In our example, each individual ID is unique, but sometimes they might be coded using non-unique identifiers. For example, compare these two tables showing two different ways of coding family and ID codes:
+
+## Non-unique ID
+
+Family | Individual
+|-----|-------|
+1|1
+1|2
+1|3
+2|1
+2|2
+2|3
+2|4
+
+## Unique ID
+
+Family | Individual
+|-----|-------|
+1|1
+1|2
+1|3
+2|4
+2|5
+2|6
+2|7
+
+## CODING CAUTION!
+
+In both cases, we have 7 different individuals, representing 2 families. Now think about what would happen if we included Individual as a random effect (ignoring family for now).
+
+In the second example, we would estimate the variance among 7 individuals, but in the first example, we would estimate the variance among 4 individuals. THIS WOULD BE WRONG! It would happen because R would see the same ID code for individual 1 from each family as being the same individual, but in fact they are different individuals
+
+In R, the easiest way to avoid this mistake, is to just recode each individual with a unique ID.
+
+# Multiple Factors
+
+Returning to the dataset, we can consider other mixed models. Let's consider the interaction model:
+
+```{r}
+formula(LMod3)
+```
+
+> What is the mixed model equivalent?
+
+With mixed models we are estimating the variance components. We already estimated the variance among families as `(1|FamID)` and we had sex as a fixed effect. So we just need the MME equivalent of the interaction term. If there is a significant interaction term in a linear model, it would mean that the difference between males and females differs for each family.  Since families are randomly sampled, so another way to think of this is that the variance among families differs for males and females, which we can add to the model:
+
+```{r}
+MMod2<-lmer(IgG ~ Sex + (Sex | FamID) , data=InitIgG)
+summary(MMod2)
+```
+
+Compare the Random effects in this model to the one with only a single random effect `(1|FamID)`. In this model we have a second variance component, which is the additional variance explained by separating Males and Females. 
+
+Note that this variance is very small, meaning that separating families by sex doesn't explain a lot more of the variation. Also notice that the residual variance is almost the same -- most of the variance explained by Sex=M comes out of the family variance.
+
+It's also important to note that we also have Sex in the Fixed effects, which is still the deviation from the intercept in the average IgG of Males. So we use Sex in both the fixed effect and random effect term of the model. In the fixed term, we estimate the deviation in the mean for the group, but in the random effect we use it to subdivide the random variable of family.
+
+So is sex a significant predictor? We can test its significance using model selection:
+
+```{r}
+lrtest(MMod2,MMod)
+```
+
+We can also do this for the Fixed Effect of Sex by replacing with an overall estimate rather than separate estimates for each sex:
+
+```{r}
+MMod3<-lmer(IgG ~ 1 + (Sex | FamID), data=InitIgG)
+lrtest(MMod2,MMod3)
+```
+
+We can see a highly significant effect.
+
+# Random Regression
+
+So far we have looked at just one time point, but we are ignoring most of our data! We could analyze each time slice as a factor similar to the models we've done so far. However, here time also represents the number of months since vaccination, so we can treat it as a continuous variable and try to fit a statistical model. To do this, we need some kind of regression function for the change in IgG over time. If we just plot the raw data:
+
+```{r}
+qplot(x=Time, y=IgG, data=ImmuneDat) + geom_smooth()
+```
+
+We can see that there is a general linear decline, but also an increase in variance. We can plot individual curves to get a sense of the overall relationship that we can try to model:
+
+```{r}
+qplot(x=Time, y=IgG, group=IndID, data=ImmuneDat) + geom_smooth()
+```
+
+
+We can try to fit a simple linear regression model and look at the residuals:
+
+```{r}
+LReg<-lm(IgG ~ FamID*Time + IndID*Time, data=ImmuneDat)
+qplot(predict(LReg),residuals(LReg))
+```
+
+
+Overall the residuals are centered around zero but seem to be heteroskedastic (unequal variance) along our predictors. Let's try building a mixed model and then come back to compare the residuals. From the graphs above, we can see that a simple linear regression is a good function to use for time. Let's start with the simplest model by incorporating time as a fixed effect:
+
+```{r}
+MModTime<-lmer(IgG ~ Sex * Time + (1  | FamID), data=ImmuneDat)
+summary(MModTime)
+```
+
+Note that we get a single slope for our fixed effect of Time, and another for the change in slope for male vs. female patients. These represent the overall average effect of how IgG changes over time. Since the estimate for time is negative, it shows that, on average, IgG levels decline over time. Since the SexM:Time is also negative, the decline is slightly faster for males -- though we should test this using model selection. We won't do it here, because you should know how to do this by now.
+
+The next thing we can do is allow slopes to differ among genetic families:
+
+```{r}
+MModTime2<-lmer(IgG ~ Sex * Time + (1 +  Time| FamID), data=ImmuneDat)
+summary(MModTime2)
+lrtest(MModTime,MModTime2)
+```
+
+Now we see highly significant improvement in the fit of the model, and new Random effects for Intercept and Time. Again, note that there is just one estimate for each, representing the variance among intercepts and slopes across all of the families. Also note that the difference in degrees of freedom is 2, even though the first model also had a random effect for family ID. In addition to the random slope, we also estimate a correlation among families between the slope and intercept. We do this because the two estimates are not independent -- think about how the intercept changes as you vary the slope for a given set of data.
+
+# ML vs ReML
+
+Mixed effects models are fit using a method called **Maximum Likelihood (ML)** or often **Restricted Maximum Likelihood (ReML)** when we include random effects. This is usually done computationally and it's related to the 'likelihood' scores that we compare when we do model selection. Remember from the [Model Selection Tutorial](https://colauttilab.github.io/RIntroStats/5_ModelSelection.html) that a model's likelihood is the probability of observing the data given a particular statistical model.
+
+The difference here is that we have a computational algorithm that searches a range of estimates (e.g. variance components), and then chooses the values that maximize the likelihood of the model given the data. It's sort of like doing a whole bunch of model selection iterations with slightly different estimates. In other words, the algorithm finds the parameter values that are the best fit to the data. REML is similar to ML except that the model estimates are 'restricted' in a way that is not biased by unbalanced sample sizes.
+
+Maximum likelihood (and ReML) is a powerful method for model fitting, but it does have some limitations.
+
+# Convergence Error
+
+We can also try to calculate a separate slope for each individual. Again, here we would calculate the variance of the intercept and slopes across all individuals, rather than estimating specific intercepts and slopes:
+
+
+```{r, error=T}
+MModTime3<-lmer(IgG ~ Sex * Time + (1 +  Time| FamID) + 
+                  (1 + Time |IndID), data=ImmuneDat)
+```
+
+Here we get an important error: "Model failed to converge". 
+
+This means that our model is unreliable because there are several different parameter values that give similar likelihood scores. This usually happens for two reasons:
+
+  1. **Model specification error**: This happens when we try to estimate too many parameters that we don't have many residual degrees of freedom. For example, if each genetic family was also from a different population, we wouldn't be able to include both family and population as separate random effects because we wouldn't be able to estimate separate variance components. This is similar to the collinearity problem with linear models, except that it happens with the grouping variable of the random effects. We avoid this problem by thinking carefully about what our model is estimating. 
+  2. **Too much parameter space**: Sometimes there is just a lot of different parameter values that need to be tested to find the maximum likelihood. We can try to help the searching algorithm by setting the `start=` prameters, but this is a bit complicated for this level.
+  
+In both cases, We can get some insight into the model performance with the `verbose=T` parameter.
+
+```{r, eval=F}
+MModTime3<-lmer(IgG ~ Sex * Time + (1 +  Time| FamID) + 
+                  (1 + Time |IndID), data=ImmuneDat, verbose=T)
+```
+
+The output (not shown) shows the fit (log likelihood) of the model for each iteration of the search algorithm. From this we can see that it declines quickly for the first ~100 iterations before getting 'stuck' without much improvement in fit.
+
+It appears we have a problem estimating separate slopes for each individual. The reason goes back to the way we define our random effect of IndID and the way it is encoded in the data. For example, let's look at th data for IndID==1
+
+
+```{r}
+Ind1<-ImmuneDat %>%
+  filter(IndID=="1")
+print(Ind1)  
+qplot(x=Time,y=IgG,colour=Sex,data=Ind1)
+```
+
+We can see that each IndID is actually two individuals -- one male and one female. In this case, they are siblings (brother and sister). When we use IndID as a random effect in the mixed model, we are trying to fit a single slope for two different individuals. What we want to do is recode the IndID so that each INDIVIDUAL has a unique ID. But another way we can deal with this is to use the sex-by-individual interaction in the random term. We can compare this to the model without individual regressions.
+
+```{r}
+MModTime4<-lmer(IgG ~ Sex * Time + (1 + Time|FamID) +
+                  (1 + Time|Sex:IndID), data=ImmuneDat)
+summary(MModTime4)
+lrtest(MModTime2,MModTime4)
+```
+
+No more convergence errors, and a highly significant LRT, meaning that this model is a better fit. Now we can see the overall intercept and slope (Time) for the fixed effects, the deviation in intercept for males (SexM) and the deviation in slope for males (SexM:Time).
+
+# QA/QC
+
+Now that we've completed our mixed model, let's compare some of the assumptions and quality control of the mixed model:
+
+```{r}
+qplot(x=predict(MModTime4),y=residuals(MModTime4))
+qplot(sample=residuals(MModTime4)) + stat_qq() + stat_qq_line()
+```
+
+# Generalized LME
+
+Linear Mixed Effects Models (LMEs) with `lmer` are the mixed-model equivalent of linear models with `lm`.
+
+Just as we could use `glm` with the `family=` parameter to fit generlized linear models, we can use the `family=` parameter in `glmer` to fit Generalized Linear Mixed Effects Models.
+
+
+
+
