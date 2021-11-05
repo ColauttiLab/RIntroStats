@@ -211,10 +211,9 @@ mean(EggF)
 
 The standard deviation $s$ of a sample is just the square-root of the 
 variance $s^2$, and it describes how much the data spreads out away from 
-the mean. The variance takes each value $x_i$ and subtracts the mean $\bar x$. 
-Then it adds all of these values together and divides by the sample size minus 1.
+the mean. The variance takes each value $x_i$, subtracts the mean $\bar x$, and squares it. Then it adds all of these values together and divides by the sample size minus 1.
 
-$$ s^2 = \frac{ \sum x_i - \bar x }{n - 1} $$
+$$ s^2 = \frac{ \sum (x_i - \bar x)^2 }{n - 1} $$
 
 ## Coefficient of Variation
 
