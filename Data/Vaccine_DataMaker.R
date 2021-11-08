@@ -1,4 +1,5 @@
 library(ggplot2)
+library(dplyr)
 Time<-18
 Ind<-135
 Family<-c(1:8)
